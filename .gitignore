@@ -11,3 +11,9 @@ Desktop.ini
 
 # Runtime-generated logs (not part of the curated evidence)
 msi_reinstall.log
+setup_wavelink_win10.log
+driver/msi_install_automated.log
+
+# User-provided Elgato MSIX (proprietary, never shipped). input/.gitkeep + input/README.txt stay tracked.
+input/*.msix
+input/*.appx

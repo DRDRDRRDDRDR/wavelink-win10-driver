@@ -1,21 +1,26 @@
-# Force-install Elgato Wave Link 3.x Driver on Windows 10 — Research / Reproduction Kit
+# Force-install Elgato Wave Link 3.x on Windows 10 — End-to-end Research / Reproduction Kit
 
 > ⚠️ **Disclaimer**: This project is not affiliated with Elgato / Corsair. It is for technical research, compatibility verification, and local reproduction only.
-> All Elgato proprietary assets (driver MSI, INF) are copyrighted by Elgato and must be used in accordance with their license.
+> All Elgato proprietary assets (driver MSI, INF, MSIX package) are copyrighted by Elgato and must be used in accordance with their license.
 > Not intended for commercial use or for circumventing normal product licensing. See [`NOTICE`](./NOTICE).
-> 中文说明见 [README.md](./README.md)。
+> 中文说明见 [README.md](./README.md).
 
 ---
 
 ## Abstract
 
-Elgato Wave Link 3.x is officially Windows 11 only. This repository provides the full set of artifacts needed to bypass the "server does not push the driver" block and install + verify the official audio driver on **Windows 10** — including reverse-engineering evidence, compatibility analysis, install logs, and a one-click reinstall script. **No Elgato proprietary app binaries are included**; only research artifacts and the official public-CDN driver (~3 MB).
+Elgato Wave Link 3.x is officially Windows 11 only. This repository provides the **end-to-end** artifact set to get it running on **Windows 10** — from "the app won't install" to "the driver is ready":
+
+1. **Step 0 (the app)**: lower the MSIX `MinVersion=22000` (Win11 gate) to Windows 10, repack, and install unsigned under Developer Mode.
+2. **Step 1 (the driver)**: bypass the "server does not push the driver" block and force-install the official audio driver, then verify.
+
+**No Elgato proprietary app binaries are shipped** (you supply the MSIX locally — see `input/`); only research artifacts, scripts, and the official public-CDN driver (~3 MB) are included.
 
 ## Background
 
 Elgato Wave Link 3.x targets Windows 11 only (MSIX `MinVersion=22000`). On **Windows 10 22H2 (19045)** the app hangs at "Install driver". Root cause: at runtime Wave Link queries the server `device-update-check.php`, and for `osVersion=10.0.19045.0` the server returns an empty list (`appDevices:[]`), so the audio driver is never delivered.
 
-Reverse-engineering and live testing confirm the block exists in only two layers (MSIX version gate + server-side driver delivery), while **the driver binaries themselves are open to Windows 10**. This repo ships the full artifact set to bypass the block, install the driver, and verify it works.
+Reverse-engineering and live testing confirm the block exists in only two layers (MSIX version gate + server-side driver delivery), while **the driver binaries themselves are open to Windows 10**. This repo ships the full artifact set and one-click scripts to bypass both.
 
 ## Compatibility Scope
 
@@ -31,21 +36,82 @@ Based on the OS-version decorations found in the 4 INF files embedded in the dri
 Key findings:
 
 - **Verified**: Windows 10 22H2 (19045).
-- **Theoretically supported**: Windows 10 **1809 (17763) and every later build** (1809 / 1903 / 1909 / 2004 / 20H1 / 20H2 / 21H1 / 21H2 / 22H2). The main drivers (UsbAudio, UsbAudioks) require 1809+; the VirtUsbAudioEmu sub-driver can go as low as 1803.
+- **Theoretically supported (driver layer)**: Windows 10 **1809 (17763) and every later build** (1809 / 1903 / 1909 / 2004 / 20H1 / 20H2 / 21H1 / 21H2 / 22H2). The main drivers (UsbAudio, UsbAudioks) require 1809+; the VirtUsbAudioEmu sub-driver can go as low as 1803.
 - **No Win11 hard-lock**: none of the 4 INF decorations carry a 22000+ (Windows 11) exclusive gate — they are open to the entire Windows 10 line.
 - **Not supported**: Windows 10 1709 (16299) and earlier (below 17134).
-- **Prerequisite**: the Wave Link 3.x app itself must first have its MSIX Win11 gate bypassed (out of scope for this repo); this repo only solves the "driver not delivered" step.
+- **Prerequisite for app auto-install**: Step 0's "unsigned install" relies on the Developer-Mode `-AllowUnsigned` capability, available on **Windows 10 2004 (19041) and newer**. On **1809 / 1909** you must re-sign the repacked MSIX with a trusted certificate (.pfx) — see "Step 0" manual note. **The driver MSI itself is supported on 1809+.**
 
 > Note: 1809+ is **theoretical support** derived from the INF OS decorations; only 22H2 has been empirically tested. If you succeed on another Windows 10 build, please open an issue/PR to extend the verified matrix.
 
+## Step 0: Bypass the MSIX Win11 gate (get the app onto Windows 10)
+
+> This step solves "the app won't install". `scripts/setup_wavelink_win10.ps1` automates Step 0 + Step 1 in one go. The explanation below is for understanding.
+
+### 0.1 How it works (manual understanding)
+
+The MSIX's `AppxManifest.xml` declares `MinVersion="10.0.22000.0"` (22000 = first Win11 build), so the Windows 10 AppX installer refuses it. To install, four things must happen:
+
+1. **Unpack the MSIX** (makeappx unpack, or any zip tool) → get `AppxManifest.xml`.
+2. **Edit the manifest**: lower `MinVersion="10.0.22000.0"` to `10.0.19041.0` (Win10 2004), and change the `<Identity>` `Publisher` to a self-signed subject such as `CN=WaveLinkPatch`.
+3. **Delete the old `AppxSignature.p7x`** (the signature is invalid once the manifest changes).
+4. **Repack + install**: under **Developer Mode**, install unsigned with `Add-AppxPackage -AllowUnsigned` (no Elgato private key required — most universal).
+
+`scripts/patch_manifest.ps1` automates the unpack → edit → repack part (steps 1–4's repack).
+
+### 0.2 One-liner (recommended)
+
+Place the official MSIX into `input/`, then run as Administrator:
+
+```bat
+:: 1) Drop your official Wave Link 3.x MSIX into input\ (any name, .msix extension)
+::    e.g. input\Elgato.WaveLink_3.2.10.4073_x64_Win10.msix
+
+:: 2) One command: Developer Mode + patch/install app + install driver + verify
+PowerShell -ExecutionPolicy Bypass -File scripts\setup_wavelink_win10.ps1
+```
+
+The script auto-detects admin rights (elevates via UAC if needed) → enables Developer Mode → patches and repacks the MSIX → `Add-AppxPackage -AllowUnsigned` installs the app → installs the official driver MSI → verifies the three core services are Running. Full log: `setup_wavelink_win10.log`.
+
+Optional parameters:
+
+| Parameter | Meaning |
+|---|---|
+| `-MsixPath <path>` | Explicit MSIX path; omit to auto-use the first `.msix` in `input\` |
+| `-SkipApp` | Skip app install (app already present; only (re)install the driver) |
+| `-SkipDriver` | Skip driver install (only install the app) |
+| `-MinBuild 19041` | Target Win10 floor after patching (default 19041 = 2004) |
+
+Example — driver only (app already installed):
+```bat
+PowerShell -ExecutionPolicy Bypass -File scripts\setup_wavelink_win10.ps1 -SkipApp
+```
+
+### 0.3 Manual re-sign route (only for 1809 / 1909, or if you prefer certs)
+
+If your OS lacks `-AllowUnsigned` (e.g. 1809/1909), re-sign the repacked MSIX with a trusted certificate:
+
+```bat
+:: 1) Patch (produces input\WaveLink_Win10_patched.msix)
+PowerShell -ExecutionPolicy Bypass -File scripts\patch_manifest.ps1 -InputMsix input\your.msix
+
+:: 2) Re-sign with your .pfx (needs Windows SDK signtool)
+signtool sign /fd SHA256 /a /f your-cert.pfx /p password input\WaveLink_Win10_patched.msix
+
+:: 3) Import cert to Trusted Root (install.ps1 shows the pattern), then install
+Add-AppxPackage input\WaveLink_Win10_patched.msix
+```
+
+> Note: this repo ships **no .pfx private key**; `certs/WaveLinkPatch.cer` is only the public half of the cert used during the original repack and cannot re-sign MSIXs for others.
+
 ## Overview
 
-| Step | What it does | Artifact |
+| Step | What it does | Artifact / Script |
 |---|---|---|
+| 0. App bypass | Lower MSIX MinVersion + install unsigned under Developer Mode | `scripts/setup_wavelink_win10.ps1` → `scripts/patch_manifest.ps1` |
 | 1. Locate driver | Reverse-engineer `Elgato.BaseClasses.Core.dll` to find the official endpoint; capture the MSI with spoofed Win11 params | `driver/WaveLinkDriver_3.0.0.466_x64.msi` |
 | 2. Compatibility check | Read the 4 INF files inside the MSI's embedded CAB; confirm no Win11-only gate | `evidence/inf/*.inf` |
-| 3. Install | `msiexec /i` (critical: use a native Windows host to avoid the MSYS path-translation trap) | exit code 0, no reboot |
-| 4. Verify | Launch the patched Wave Link 3.x; capture logs confirming 17/17 virtual routing endpoints ready | `reports/wavelink_verify_report.md` |
+| 3. Install driver | `msiexec /i` (critical: use a native Windows host to avoid the MSYS path-translation trap) | exit code 0, no reboot |
+| 4. Verify | Launch Wave Link 3.x; capture logs confirming 17/17 virtual routing endpoints ready | `reports/wavelink_verify_report.md` |
 
 Conclusion: the driver binaries are Win10-compatible (`LaunchConditions` pass, no Win11 decoration in any INF); the original "stuck at Install driver" block (server-side non-delivery) is bypassed.
 
@@ -61,19 +127,23 @@ wavelink_win10_driver/
 ├── driver/
 │   └── WaveLinkDriver_3.0.0.466_x64.msi   # Official public-CDN driver (~3MB)
 ├── scripts/
-│   ├── reinstall_wavelink_driver.bat      # One-click reinstall (admin elevation + msiexec /qn)
-│   ├── fetch_driver.bat                   # Re-download MSI from official CDN (binary-free alternative)
-│   ├── extract_cab.py                     # Extract MSI embedded CAB via olefile
-│   ├── find_cab.py                        # Locate the Media.cab stream inside the MSI
-│   ├── list_streams.py                    # List OLE compound-file streams
-│   ├── patch_manifest.py                  # Patch MSIX AppxManifest MinVersion (bypass Win11 gate)
-│   ├── envcheck.ps1                       # Environment check (admin / MSI path)
-│   └── install.ps1                        # Native-host install entry point
+│   ├── setup_wavelink_win10.ps1          # ★ End-to-end: patch+install app + install driver + verify
+│   ├── patch_manifest.ps1                # ★ Lower MSIX AppxManifest MinVersion + repack (bypass Win11 gate)
+│   ├── reinstall_wavelink_driver.bat     # Standalone one-click driver reinstall (admin elevation + msiexec /qn)
+│   ├── fetch_driver.bat                  # Re-download MSI from official CDN (binary-free alternative)
+│   ├── fetch_app.bat                     # Instructions for obtaining the MSIX (app not hosted here)
+│   ├── extract_cab.py / find_cab.py / list_streams.py  # Research: extract MSI embedded CAB
+│   ├── patch_manifest.py                 # Research: earlier Python patcher (same principle)
+│   ├── envcheck.ps1                      # Research: environment check (admin / MSI path)
+│   └── install.ps1                       # Research: cert import + Add-AppxPackage entry
 ├── reports/
 │   ├── wavelink_driver_install_report.md  # Install & INF compatibility report
 │   └── wavelink_verify_report.md          # Live verification report (17/17 endpoints)
 ├── certs/
-│   └── WaveLinkPatch.cer                  # Self-signed cert for MSIX repack (illustrative only, not required)
+│   └── WaveLinkPatch.cer                  # Public half of the repack cert (illustrative only, no private key)
+├── input/                                # ★ Drop your official MSIX here (*.msix ignored by .gitignore)
+│   ├── README.txt
+│   └── .gitkeep
 └── evidence/
     ├── inf/                               # 4 Elgato INF files (Win10 compatibility proof, © Elgato)
     │   ├── ElgatoUsbAudio.inf
@@ -87,16 +157,16 @@ wavelink_win10_driver/
     ├── extract_log2.txt / envcheck.txt / install_log.txt / exitcode.txt
 ```
 
-## Step-by-Step Guide
+> ★ = core end-to-end automation scripts. The other `.py` / older `.ps1` files are research artifacts kept for reference, not required.
 
-> This guide assumes you have already bypassed the MSIX Win11 gate and installed the Wave Link 3.x app on Windows 10. This repo solves only the "driver not delivered" step.
+## Step-by-Step Guide
 
 ### Prerequisites
 
-- **Windows 10 1809 (17763) or newer** (22H2 / 19045 verified; 1809+ theoretical — see Compatibility Scope). Check: press `Win + R` → type `winver` → Enter.
-- Wave Link 3.x installed (app launches but hangs at "Install driver" / routing endpoints missing).
-- Administrator rights (required to install a kernel driver).
-- This repository downloaded locally (see Step 1).
+- **Windows 10 2004 (19041) or newer** (22H2 / 19045 verified). On **1809/1909**, the app auto-install needs a trusted-cert re-sign (see 0.3); the driver MSI is supported on 1809+. Check: press `Win + R` → type `winver` → Enter.
+- **Official Wave Link 3.x MSIX** (you provide it, placed in `input/`).
+- Administrator rights (required for app + kernel driver install).
+- This repository downloaded locally.
 
 ### Step 1: Get the repository
 
@@ -110,13 +180,36 @@ git clone https://github.com/<your-username>/wavelink-win10-driver.git
 cd wavelink-win10-driver
 ```
 
-### Step 2: Install the driver
+### Step 2: Place the official MSIX
 
-#### Option A: One-click (recommended)
-1. Open the `scripts\` folder.
+Put your official Wave Link 3.x MSIX into the repo's `input\` folder, e.g.:
+`input\Elgato.WaveLink_3.2.10.4073_x64_Win10.msix`.
+(Source: Elgato official downloader export / Store export / your backup. Not hosted by this repo.)
+
+### Step 3: One-click end-to-end install (recommended)
+
+Open PowerShell as Administrator (or just type `powershell` in the Explorer address bar),
+`cd` to the repo root, and run:
+
+```bat
+PowerShell -ExecutionPolicy Bypass -File scripts\setup_wavelink_win10.ps1
+```
+
+The script will: elevate if needed → enable Developer Mode → patch & repack the MSIX →
+install the app unsigned → install the official driver MSI → verify the
+`ElgatoVirtUsbAudioEmu / ElgatoUsbAudio / ElgatoUsbAudioks` services are Running. Log: `setup_wavelink_win10.log`.
+
+Driver only (app already installed): add `-SkipApp`.
+App only (driver already installed): add `-SkipDriver`.
+
+### Step 4 (alt): Driver install only
+
+If you only want to (re)install the driver:
+
+#### Option A: One-click
+1. Open `scripts\`.
 2. **Right-click** `reinstall_wavelink_driver.bat` → **Run as administrator**.
-3. The script auto-detects admin rights; if not elevated it triggers a UAC prompt. Silent install (`/qn`), takes ~tens of seconds.
-4. When the window returns to the prompt, done. No reboot needed.
+3. Silent install (`/qn`), ~tens of seconds, no reboot.
 
 #### Option B: Manual (copy-paste)
 1. Open Command Prompt (CMD) **as administrator**: press `Win`, type `cmd`, right-click → Run as administrator.
@@ -125,43 +218,43 @@ cd wavelink-win10-driver
 cd /d "C:\wavelink-win10-driver\driver"
 msiexec /i WaveLinkDriver_3.0.0.466_x64.msi /qn /norestart /l*v msi_install.log
 ```
-3. Wait for the command to return (no progress bar); the tail of `msi_install.log` should show `Return Value 0`.
+3. The tail of `msi_install.log` should show `Return Value 0`.
 
 > ⚠️ **Critical gotcha**: Always launch `msiexec` from a native Windows host (cmd.exe / PowerShell). Under **Git Bash / MSYS** the path `C:\Users\...` is rewritten to `/Users\...`, causing server error `Note 1314` and exit code **83**. Use CMD or `scripts/install.ps1`.
 
-### Step 3: Verify
+### Step 5: Verify
 
-1. Launch Wave Link 3.x (requires the MSIX repack step, out of scope).
+1. Launch Wave Link 3.x (if you used the one-click script, the app is already installed).
 2. Open **Wave Link Settings → Output Routing** and confirm all of these endpoints are visible and selectable:
    `Wave Mic 1–4, Game, Music, Chat Mix, Voice Chat, Browser, SFX, System, Aux 1/2, Aux Mix, Personal Mix, Stream Mix, Recording Mix` (17 total).
 3. If all appear, the driver is installed. Detailed evidence: `reports/wavelink_verify_report.md`.
 
 > In the first ~2 minutes you may see `hr=0x88890004` (pipeline init jitter) — benign, settles shortly.
 
-### Step 4: Re-fetch the driver if missing
+### Step 6: Re-fetch if missing
 
-If you deleted `driver/*.msi` or want a guaranteed original:
-1. Open `scripts\`.
-2. Double-click `fetch_driver.bat` (or right-click → Run as administrator).
-3. It re-downloads from the official public CDN `https://edge.elgato.com/egc/windows/ewlw/drivers/WaveLinkDriver_3.0.0.466_x64.msi` into `driver\`.
-   - Internet required; if your network cannot reach the CDN directly, configure a proxy before running.
+- **Driver MSI missing**: open `scripts\`, double-click `fetch_driver.bat` to re-download from the official public CDN into `driver\`.
+- **App MSIX help**: open `scripts\`, double-click `fetch_app.bat` for placement guidance; drop the official MSIX into `input\` and re-run the one-click script.
 
 ### FAQ
 
-**Q1: The install script flashes by / does nothing?**
-A: Must be run inside `scripts\` and as administrator. Run `scripts\reinstall_wavelink_driver.bat` manually from CMD to see full output.
+**Q1: The one-click script flashes by / does nothing?**
+A: Run it manually from an elevated PowerShell at the repo root: `PowerShell -ExecutionPolicy Bypass -File scripts\setup_wavelink_win10.ps1` to see full output. Some AV may block Developer Mode / AppX install — allow temporarily.
 
-**Q2: msiexec exit code 83?**
-A: Almost always the Git Bash/MSYS path translation. Use native CMD or `install.ps1`, keeping the path as `C:\...`. See the Step 2 warning.
+**Q2: `Add-AppxPackage` says "-AllowUnsigned is not supported"?**
+A: That parameter requires Windows 10 **2004 (19041) or newer** Developer Mode. On 1809/1909 use the "0.3 manual re-sign route" (sign with a trusted .pfx, then install).
 
-**Q3: Log shows `Found 0 drivers` — did it fail?**
+**Q3: msiexec exit code 83?**
+A: Almost always the Git Bash/MSYS path translation. Use native CMD or `install.ps1`, keeping the path as `C:\...`. See the Step 4 warning.
+
+**Q4: Log shows `Found 0 drivers` — did it fail?**
 A: No. That is the runtime querying the server for updates (Win10 server delivers none), not a local absence. The same log shows `Found current driver version: 3.0.0.466`, proving the local driver is present.
 
-**Q4: Can the repo be completely binary-free?**
-A: Yes. Delete `driver/*.msi` and use `scripts/fetch_driver.bat` instead (see Step 4).
+**Q5: Can the repo be completely binary-free?**
+A: Yes. Delete `driver/*.msi` and use `scripts/fetch_driver.bat`; the app MSIX is never in the repo anyway (in `input/`, ignored by `.gitignore`).
 
-**Q5: I'm on Windows 10 1809 / 1909 / 21H1 — will it work?**
-A: Based on the INF OS decorations, the driver install layer is **theoretically supported on 1809 (17763) and above** (VirtUsbAudioEmu can go to 1803). Only 22H2 is empirically verified; try it on older builds per this guide and report back. 1709 (16299) and earlier are not supported.
+**Q6: I'm on Windows 10 1809 / 1909 / 21H1 — will it work?**
+A: The driver install layer is **theoretically supported on 1809 (17763) and above** (VirtUsbAudioEmu can go to 1803). The app auto-install path needs 2004+ (due to `-AllowUnsigned`); on 1809/1909 see 0.3 signing. Only 22H2 is empirically verified — try it and report back.
 
 ## Compliance & Exclusions
 
@@ -174,16 +267,16 @@ This repo deliberately **excludes** the following Elgato proprietary / large ite
 | Driver binaries `.sys`/`.dll`/`.cat` | — | Provided by the MSI itself; redistributing standalone is a copyright risk |
 | `win11_update.xml` | 52MB | Server-response cache |
 
-**Included**: reports, scripts, evidence logs, the official public-CDN driver MSI (3MB), self-signed cert, and the 4 INF texts.
+**Included**: reports, scripts, evidence logs, the official public-CDN driver MSI (3MB), self-signed cert, and the 4 INF texts. The app MSIX is supplied locally by the user (in `input/`, git-ignored) and never enters the repo.
 
 > For a binary-free repo, delete `driver/*.msi` and use `scripts/fetch_driver.bat`.
 
 ## Known Limitations
 
+- Step 0's "unsigned app install" relies on Windows 10 **2004 (19041) or newer** Developer Mode `-AllowUnsigned`; 1809/1909 need a trusted-cert re-sign (no .pfx shipped here).
 - In the first ~2 minutes `hr=0x88890004` (Thesycon pipeline init jitter) may appear — benign.
 - `Found 0 drivers` in the log is a runtime server-update query (Win10 server delivers none), not a local absence — the same log shows `Found current driver version: 3.0.0.466`.
 - GUI-level final verification (play audio, confirm meters move) requires manual operation on your side.
-- This repo does not ship the repacked Wave Link app (copyright & size); it only closes the driver-install loop.
 - Compatibility is empirically verified only on Windows 10 22H2; 1809+ is theoretical, not per-build tested.
 
 ## References
