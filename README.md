@@ -58,7 +58,7 @@ Wave Link 运行时向服务端 `device-update-check.php` 请求驱动，服务�
 若你不想敲命令行，本仓库同时提供**原生 Windows GUI 安装器**（C#/.NET 8 编译的单个 exe），把"放 MSIX → 改包 → 装应用 → 装驱动 → 验证"全部收进一个窗口，实时显示日志。它是脚本版（`scripts/setup_wavelink_win10.ps1`）的同功能封装，二者任选其一。
 
 ### 获取 exe
-- **GitHub Releases**：在仓库 Releases 页面下载 `WaveLinkWin10Setup.exe`（self-contained 单文件，约 60–80MB，无需预装 .NET 运行时）。
+- **GitHub Releases**：下载 `WaveLinkWin10Setup.exe`（self-contained 单文件，约 **150 MB**，无需预装 .NET 运行时）：https://github.com/DRDRDRRDDRDR/wavelink-win10-driver/releases
 - 或自行构建（见下方「从源码构建」）。
 
 ### 使用
@@ -71,7 +71,7 @@ Wave Link 运行时向服务端 `device-update-check.php` 请求驱动，服务�
 4. 安装类操作会**自动请求管理员提权（UAC）**，确认即可。
 5. 日志框实时滚动；结束三个 Elgato 服务显示 `Running` 即成功。
 
-> exe 已内嵌改包脚本（`patch_manifest.ps1`），运行时只需旁挂 `driver\`（官方 MSI）与 `input\`（你的 MSIX）。`dist/` 即为完整分发包。
+> exe 已内嵌改包脚本（`patch_manifest.ps1`）。运行时需 `input\`（你的 MSIX）；若 `driver\` 下缺官方驱动 MSI，exe 会尝试调用同目录 `scripts/fetch_driver.bat` 从官方 CDN 自动下载——为稳妥起见，建议直接将仓库 `driver/` 目录放到 exe 旁，或从源码构建得到含 `driver/`、`input/` 的完整 `dist/`。详见 [FAQ.md](./FAQ.md)「五、图形界面安装器」。
 
 ### 从源码构建
 需要本机安装 [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)。在仓库根目录执行：

@@ -70,3 +70,25 @@ A：可以。删除 `driver/*.msi`，改用 `fetch_driver.bat` 下载；应用 M
 
 **Q6：我的 Windows 10 是 1809 / 1909 / 21H1 等更老版本，能用吗？**
 A：驱动安装层**理论支持 1809（17763）及以上全系**（VirtUsbAudioEmu 子驱动可下至 1803）。应用自动安装路径需 2004+（因 `-AllowUnsigned`）；1809/1909 见「二、手动重签名路线」。仅 22H2 实测通过，更老版本请自行验证并反馈。
+
+## 五、图形界面安装器（WaveLinkWin10Setup.exe）
+
+exe 是 C#/.NET 8 编译的**原生单文件 GUI**，把脚本版（`setup_wavelink_win10.ps1`）的全流程收进一个窗口。
+
+**Q7：运行 exe 需要预装 .NET 吗？**
+A：不需要。exe 是 self-contained 单文件（约 150 MB），已内置 .NET 8 运行时，双击即可运行。
+
+**Q8：只下载了 Release 的 exe 单文件，旁边没有 `driver\` / `input\` 怎么办？**
+A：把官方 Wave Link MSIX 放进 exe 同目录的 `input\` 即可。驱动 MSI 若不在 `driver\` 下，exe 会尝试调用同目录 `scripts/fetch_driver.bat` 从官方 CDN 自动下载；若你只拿了单文件 exe（无 `scripts/`），下载不会触发，请手动把仓库 `driver/WaveLinkDriver_3.0.0.466_x64.msi` 放到 exe 同目录 `driver\`（或从官方 CDN 直链下载：`https://edge.elgato.com/egc/windows/ewlw/drivers/WaveLinkDriver_3.0.0.466_x64.msi`）。最稳妥：从仓库下载 ZIP（含 `driver/` 与 `input/`）后把 exe 放进去。
+
+**Q9：exe 和 PowerShell 脚本版有什么区别？**
+A：功能完全一样（放 MSIX → 改包 → 装应用 → 装驱动 → 验证），只是交互形态不同：exe 有窗口和实时日志、安装操作自动 UAC 提权；脚本版是命令行。任选其一。
+
+**Q10：想自己从源码构建 exe？**
+A：需要本机装 [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)，在仓库根目录执行 `PowerShell -ExecutionPolicy Bypass -File build_exe.ps1`，产物为 `dist/WaveLinkWin10Setup.exe`（构建脚本会自动把 `driver/`、`input/` 复制进 `dist/`，可直接分发）。
+
+**Q11：exe 报"应用安装失败 / 未找到 Elgato.WaveLink"（1809/1909）？**
+A：这些版本不支持 `-AllowUnsigned`。请改用「二、手动重签名路线」（用受信任 .pfx 签名后安装），或升级到 Windows 10 2004+。
+
+**Q12：exe 体积为什么这么大（约 150 MB）？**
+A：它是 self-contained 单文件，把整个 .NET 8 运行时一起打进了 exe，因此无需用户预装 .NET。若想更小，可自行构建为依赖框架的版本（需目标机已装 .NET 8 运行时）。

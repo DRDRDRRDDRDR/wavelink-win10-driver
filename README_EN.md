@@ -52,7 +52,7 @@ Key findings:
 If you prefer not to use the command line, this repo also ships a **native Windows GUI installer** (a single C#/.NET 8 exe) that wraps *place MSIX → patch → install app → install driver → verify* into one window with a live log. It is a feature-equivalent wrapper of the script (`scripts/setup_wavelink_win10.ps1`) — pick either.
 
 ### Get the exe
-- **GitHub Releases**: download `WaveLinkWin10Setup.exe` from the repo's Releases page (self-contained single file, ~60–80 MB, no pre-installed .NET runtime needed).
+- **GitHub Releases**: download `WaveLinkWin10Setup.exe` from the repo's Releases page (self-contained single file, ~**150 MB**, no pre-installed .NET runtime needed): https://github.com/DRDRDRRDDRDR/wavelink-win10-driver/releases
 - Or build it yourself (see "Build from source" below).
 
 ### Usage
@@ -65,7 +65,7 @@ If you prefer not to use the command line, this repo also ships a **native Windo
 4. Install actions will **auto-request admin elevation (UAC)** — approve it.
 5. The log box scrolls live; when the three Elgato services show `Running`, you are done.
 
-> The exe embeds the patch script (`patch_manifest.ps1`); at runtime it only needs `driver\` (official MSI) and `input\` (your MSIX) alongside it. `dist/` is the complete distributable.
+> The exe embeds the patch script (`patch_manifest.ps1`). At runtime it needs `input\` (your MSIX); if the official driver MSI is missing under `driver\`, the exe tries to call the sibling `scripts/fetch_driver.bat` to auto-download it from the official CDN. For safety, place the repo's `driver/` next to the exe, or build `dist/` (which already contains `driver/` and `input/`) from source. See FAQ_EN.md "5. GUI installer".
 
 ### Build from source
 Requires the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) installed locally. From the repo root run:

@@ -64,3 +64,25 @@ A: Yes. Delete `driver/*.msi` and use `scripts/fetch_driver.bat`; the app MSIX i
 
 **Q6: I'm on Windows 10 1809 / 1909 / 21H1 — will it work?**
 A: The driver install layer is **theoretically supported on 1809 (17763) and above** (VirtUsbAudioEmu can go to 1803). The app auto-install path needs 2004+ (due to `-AllowUnsigned`); on 1809/1909 see "2. Manual re-sign route". Only 22H2 is empirically verified — try it and report back.
+
+## 5. GUI installer (WaveLinkWin10Setup.exe)
+
+The exe is a native **single-file GUI** built with C#/.NET 8; it wraps the entire script flow (`setup_wavelink_win10.ps1`) into one window.
+
+**Q7: Does running the exe require a pre-installed .NET runtime?**
+A: No. The exe is self-contained (~150 MB) and bundles the .NET 8 runtime, so it runs by double-clicking.
+
+**Q8: I downloaded only the single exe from Releases — there is no driver\ / input\ next to it?**
+A: Just drop your official Wave Link MSIX into an `input\` folder next to the exe. If the driver MSI is missing under `driver\`, the exe tries to call the sibling `scripts/fetch_driver.bat` to auto-download it from the official CDN; if you only grabbed the bare exe (no `scripts/`), that won't trigger — manually place the repo's `driver/WaveLinkDriver_3.0.0.466_x64.msi` into a `driver\` folder next to the exe (or download it directly: `https://edge.elgato.com/egc/windows/ewlw/drivers/WaveLinkDriver_3.0.0.466_x64.msi`). Safest: download the repo ZIP (which contains driver/ and input/), then drop the exe inside.
+
+**Q9: What is the difference between the exe and the PowerShell script?**
+A: Identical functionality (place MSIX → patch → install app → install driver → verify); only the interaction differs — the exe has a window with a live log and auto-UAC elevation for install steps, while the script is command-line. Pick either.
+
+**Q10: How do I build the exe from source?**
+A: Install the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) locally, then from the repo root run `PowerShell -ExecutionPolicy Bypass -File build_exe.ps1`. Output: `dist/WaveLinkWin10Setup.exe` (the build script copies `driver/` and `input/` into `dist/`, ready to ship).
+
+**Q11: The exe says "app install failed / Elgato.WaveLink not found" (on 1809/1909)?**
+A: Those builds lack `-AllowUnsigned`. Use "2. Manual re-sign route" (sign with a trusted .pfx, then install), or upgrade to Windows 10 2004+.
+
+**Q12: Why is the exe so large (~150 MB)?**
+A: It is self-contained and embeds the whole .NET 8 runtime, so no .NET needs to be pre-installed. For a smaller file, build a framework-dependent version (requires .NET 8 runtime on the target machine).
