@@ -47,6 +47,33 @@ Key findings:
 
 > This guide follows the **one-click script** as the main path: a single command performs *bypass the Win11 gate + install driver + verify*. For the underlying principle or manual methods, see [FAQ_EN.md](./FAQ_EN.md).
 
+## GUI Installer (WaveLinkWin10Setup.exe)
+
+If you prefer not to use the command line, this repo also ships a **native Windows GUI installer** (a single C#/.NET 8 exe) that wraps *place MSIX → patch → install app → install driver → verify* into one window with a live log. It is a feature-equivalent wrapper of the script (`scripts/setup_wavelink_win10.ps1`) — pick either.
+
+### Get the exe
+- **GitHub Releases**: download `WaveLinkWin10Setup.exe` from the repo's Releases page (self-contained single file, ~60–80 MB, no pre-installed .NET runtime needed).
+- Or build it yourself (see "Build from source" below).
+
+### Usage
+1. Place your official MSIX into `input\` next to the exe.
+2. Double-click `WaveLinkWin10Setup.exe`.
+3. In the window:
+   - Click **Browse** to pick the MSIX (leave empty to auto-use the first `*.msix` in `input\`);
+   - Tick **Skip app install / Skip driver install** as needed;
+   - Click **Run all (one-click)** (or Install app only / Install driver only / Verify / Environment check).
+4. Install actions will **auto-request admin elevation (UAC)** — approve it.
+5. The log box scrolls live; when the three Elgato services show `Running`, you are done.
+
+> The exe embeds the patch script (`patch_manifest.ps1`); at runtime it only needs `driver\` (official MSI) and `input\` (your MSIX) alongside it. `dist/` is the complete distributable.
+
+### Build from source
+Requires the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) installed locally. From the repo root run:
+```bat
+PowerShell -ExecutionPolicy Bypass -File build_exe.ps1
+```
+Output: `dist/WaveLinkWin10Setup.exe` (the script auto-copies `driver/` and `input/` into `dist/`, ready to ship).
+
 ### Prerequisites
 
 - **Windows 10 2004 (19041) or newer** (22H2 / 19045 verified). On **1809/1909**, the app auto-install needs a trusted-cert re-sign (see FAQ_EN.md "Manual re-sign route"); the driver MSI is supported on 1809+. Check: press `Win + R` → type `winver` → Enter.
@@ -145,6 +172,9 @@ wavelink_win10_driver/
 ├── NOTICE                         # Compliance & copyright
 ├── LICENSE                        # MIT (self-authored only)
 ├── .gitignore
+├── build_exe.ps1                  # Build the GUI installer (dotnet publish self-contained)
+├── src/WaveLinkWin10Setup/        # GUI installer source (C#/.NET 8 WinForms; patch_manifest.ps1 embedded as resource)
+└── dist/                          # ★ Build output (git-ignored; distributed via Releases)
 ├── driver/
 │   └── WaveLinkDriver_3.0.0.466_x64.msi   # Official public-CDN driver (~3MB)
 ├── scripts/

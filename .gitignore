@@ -17,3 +17,8 @@ driver/msi_install_automated.log
 # User-provided Elgato MSIX (proprietary, never shipped). input/.gitkeep + input/README.txt stay tracked.
 input/*.msix
 input/*.appx
+
+# Build output of the C# GUI (distributed via GitHub Releases, not committed)
+dist/
+src/WaveLinkWin10Setup/bin/
+src/WaveLinkWin10Setup/obj/
