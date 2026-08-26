@@ -11,6 +11,7 @@ namespace WaveLinkWin10Setup
         CheckBox chkSkipApp;
         CheckBox chkSkipDriver;
         NumericUpDown numMinBuild;
+        Label lblMsix;
         Label lblMinBuild;
         Button btnRunAll;
         Button btnInstallApp;
@@ -18,6 +19,8 @@ namespace WaveLinkWin10Setup
         Button btnVerify;
         Button btnCheck;
         TextBox txtLog;
+        Label lblLang;
+        ComboBox cboLang;
         string pendingRun;
 
         public MainForm(string[] args)
@@ -50,27 +53,38 @@ namespace WaveLinkWin10Setup
 
         void InitializeComponent()
         {
-            Text = "Wave Link 3.x · Windows 10 安装器";
+            Text = Lang.T("title");
             ClientSize = new System.Drawing.Size(760, 580);
             MinimizeBox = false;
             StartPosition = FormStartPosition.CenterScreen;
 
-            var lblMsix = new Label { Left = 12, Top = 14, Width = 420, Height = 18, Text = "官方 Wave Link MSIX 路径（留空则自动用 input/ 下第一个）" };
+            lblMsix = new Label { Left = 12, Top = 14, Width = 440, Height = 18, Text = Lang.T("lblMsix") };
             txtMsix = new TextBox { Left = 12, Top = 36, Width = 520, Height = 23 };
-            btnBrowse = new Button { Left = 544, Top = 34, Width = 96, Height = 26, Text = "浏览..." };
+            btnBrowse = new Button { Left = 544, Top = 34, Width = 96, Height = 26, Text = Lang.T("btnBrowse") };
             btnBrowse.Click += (s, e) => BrowseMsix();
 
-            chkSkipApp = new CheckBox { Left = 12, Top = 70, Width = 200, Height = 22, Text = "跳过应用安装（已装好）" };
-            chkSkipDriver = new CheckBox { Left = 220, Top = 70, Width = 200, Height = 22, Text = "跳过驱动安装（已装好）" };
+            lblLang = new Label { Left = 470, Top = 12, Width = 60, Height = 18, Text = Lang.T("langLabel") };
+            cboLang = new ComboBox { Left = 536, Top = 10, Width = 120, Height = 23, DropDownStyle = ComboBoxStyle.DropDownList };
+            cboLang.Items.Add("中文");
+            cboLang.Items.Add("English");
+            cboLang.SelectedIndex = Lang.Mode == "zh" ? 0 : 1;
+            cboLang.SelectedIndexChanged += (s, e) =>
+            {
+                Lang.SetMode(cboLang.SelectedIndex == 0 ? "zh" : "en");
+                ApplyLang();
+            };
 
-            lblMinBuild = new Label { Left = 470, Top = 70, Width = 120, Height = 22, Text = "最低 Win10 版本(build)" };
+            chkSkipApp = new CheckBox { Left = 12, Top = 70, Width = 200, Height = 22, Text = Lang.T("chkSkipApp") };
+            chkSkipDriver = new CheckBox { Left = 220, Top = 70, Width = 200, Height = 22, Text = Lang.T("chkSkipDriver") };
+
+            lblMinBuild = new Label { Left = 470, Top = 70, Width = 120, Height = 22, Text = Lang.T("lblMinBuild") };
             numMinBuild = new NumericUpDown { Left = 596, Top = 68, Width = 120, Height = 23, Minimum = 17134, Maximum = 22000, Value = 19041, Increment = 1 };
 
-            btnRunAll = new Button { Left = 12, Top = 104, Width = 140, Height = 30, Text = "一键运行全部" };
-            btnInstallApp = new Button { Left = 162, Top = 104, Width = 130, Height = 30, Text = "仅装应用" };
-            btnInstallDriver = new Button { Left = 302, Top = 104, Width = 130, Height = 30, Text = "仅装驱动" };
-            btnVerify = new Button { Left = 442, Top = 104, Width = 120, Height = 30, Text = "验证" };
-            btnCheck = new Button { Left = 572, Top = 104, Width = 160, Height = 30, Text = "环境检查(干跑)" };
+            btnRunAll = new Button { Left = 12, Top = 104, Width = 140, Height = 30, Text = Lang.T("btnRunAll") };
+            btnInstallApp = new Button { Left = 162, Top = 104, Width = 130, Height = 30, Text = Lang.T("btnInstallApp") };
+            btnInstallDriver = new Button { Left = 302, Top = 104, Width = 130, Height = 30, Text = Lang.T("btnInstallDriver") };
+            btnVerify = new Button { Left = 442, Top = 104, Width = 120, Height = 30, Text = Lang.T("btnVerify") };
+            btnCheck = new Button { Left = 572, Top = 104, Width = 160, Height = 30, Text = Lang.T("btnCheck") };
 
             btnRunAll.Click += (s, e) => RunElevated("all");
             btnInstallApp.Click += (s, e) => RunElevated("app");
@@ -90,19 +104,37 @@ namespace WaveLinkWin10Setup
                 Font = new System.Drawing.Font("Consolas", 9.5F)
             };
 
-            Controls.AddRange(new Control[] { lblMsix, txtMsix, btnBrowse, chkSkipApp, chkSkipDriver,
+            Controls.AddRange(new Control[] { lblMsix, txtMsix, btnBrowse, lblLang, cboLang, chkSkipApp, chkSkipDriver,
                 lblMinBuild, numMinBuild, btnRunAll, btnInstallApp, btnInstallDriver, btnVerify, btnCheck, txtLog });
 
-            Log("提示：安装类操作需管理员权限，点击后会自动请求提权（UAC）。");
-            Log("步骤：① 浏览/放入官方 MSIX 到 input/ → ② 点「一键运行全部」→ ③ 验证服务 Running。");
+            Log(Lang.T("tipLog"));
+            Log(Lang.T("stepLog"));
+        }
+
+        /// <summary>Refresh all control captions to the current language.</summary>
+        void ApplyLang()
+        {
+            Text = Lang.T("title");
+            lblMsix.Text = Lang.T("lblMsix");
+            btnBrowse.Text = Lang.T("btnBrowse");
+            chkSkipApp.Text = Lang.T("chkSkipApp");
+            chkSkipDriver.Text = Lang.T("chkSkipDriver");
+            lblMinBuild.Text = Lang.T("lblMinBuild");
+            btnRunAll.Text = Lang.T("btnRunAll");
+            btnInstallApp.Text = Lang.T("btnInstallApp");
+            btnInstallDriver.Text = Lang.T("btnInstallDriver");
+            btnVerify.Text = Lang.T("btnVerify");
+            btnCheck.Text = Lang.T("btnCheck");
+            lblLang.Text = Lang.T("langLabel");
+            cboLang.SelectedIndex = Lang.Mode == "zh" ? 0 : 1;
         }
 
         void BrowseMsix()
         {
             using var dlg = new OpenFileDialog
             {
-                Filter = "MSIX 包 (*.msix)|*.msix|所有文件 (*.*)|*.*",
-                Title = "选择官方 Wave Link MSIX"
+                Filter = Lang.T("dlgFilter"),
+                Title = Lang.T("dlgTitle")
             };
             if (dlg.ShowDialog() == DialogResult.OK) txtMsix.Text = dlg.FileName;
         }
@@ -139,7 +171,7 @@ namespace WaveLinkWin10Setup
             }
             catch (Exception ex)
             {
-                Log("提权失败（已取消或出错）: " + ex.Message);
+                Log(Lang.T("elevateFail") + ex.Message);
             }
         }
 
@@ -160,7 +192,7 @@ namespace WaveLinkWin10Setup
             }
             catch (Exception ex)
             {
-                Log("错误: " + ex.Message);
+                Log(Lang.T("errPrefix") + ex.Message);
             }
         }
     }

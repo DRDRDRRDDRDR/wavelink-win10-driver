@@ -64,6 +64,7 @@ If you prefer not to use the command line, this repo also ships a **native Windo
    - Click **Run all (one-click)** (or Install app only / Install driver only / Verify / Environment check).
 4. Install actions will **auto-request admin elevation (UAC)** — approve it.
 5. The log box scrolls live; when the three Elgato services show `Running`, you are done.
+6. **UI language**: use the **Language** drop-down at the top-right to switch between **中文 / English**. The choice is persisted to `%LOCALAPPDATA%\WaveLinkWin10Setup\lang.cfg` and applies to the next launch and the elevated child process. Default follows the OS display language.
 
 > The exe embeds the patch script (`patch_manifest.ps1`). At runtime it needs `input\` (your MSIX); if the official driver MSI is missing under `driver\`, the exe tries to call the sibling `scripts/fetch_driver.bat` to auto-download it from the official CDN. For safety, place the repo's `driver/` next to the exe, or build `dist/` (which already contains `driver/` and `input/`) from source. See FAQ_EN.md "5. GUI installer".
 

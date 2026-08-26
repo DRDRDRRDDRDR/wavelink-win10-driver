@@ -70,6 +70,7 @@ Wave Link 运行时向服务端 `device-update-check.php` 请求驱动，服务�
    - 点 **一键运行全部**（或仅装应用 / 仅装驱动 / 验证 / 环境检查）。
 4. 安装类操作会**自动请求管理员提权（UAC）**，确认即可。
 5. 日志框实时滚动；结束三个 Elgato 服务显示 `Running` 即成功。
+6. **界面语言**：窗口右上角「语言」下拉可在 **中文 / English** 间切换；选择会被记住（写入 `%LOCALAPPDATA%\WaveLinkWin10Setup\lang.cfg`），下次启动与提权子进程沿用。默认跟随系统显示语言。
 
 > exe 已内嵌改包脚本（`patch_manifest.ps1`）。运行时需 `input\`（你的 MSIX）；若 `driver\` 下缺官方驱动 MSI，exe 会尝试调用同目录 `scripts/fetch_driver.bat` 从官方 CDN 自动下载——为稳妥起见，建议直接将仓库 `driver/` 目录放到 exe 旁，或从源码构建得到含 `driver/`、`input/` 的完整 `dist/`。详见 [FAQ.md](./FAQ.md)「五、图形界面安装器」。
 

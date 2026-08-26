@@ -17,27 +17,27 @@ namespace WaveLinkWin10Setup
             var lines = new System.Collections.Generic.List<string>();
             void Emit(string s) { lines.Add(s); Console.WriteLine(s); }
 
-            Emit("=== Wave Link Win10 Setup - 环境检查 (--check) ===");
+            Emit(Lang.T("checkHeader"));
             int build = Installer.GetOsBuild();
-            Emit($"OS build            : {build} ({(build >= 17763 ? "满足 >= 1809" : "不满足，需 1809+")})");
-            Emit($"Administrator       : {Installer.IsAdmin()}");
+            Emit(string.Format(Lang.T("checkOs"), build, build >= 17763 ? Lang.T("envBuildOk") : Lang.T("envBuildBad")));
+            Emit(string.Format(Lang.T("checkAdmin"), Installer.IsAdmin()));
 
             bool dev = false;
             using (var k = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock"))
                 dev = k?.GetValue("AllowDevelopmentWithoutDevLicense") as int? == 1;
-            Emit($"Developer Mode       : {dev}");
+            Emit(string.Format(Lang.T("checkDev"), dev));
 
             string root = Installer.RepoRoot;
-            Emit($"Repo root           : {root}");
+            Emit(string.Format(Lang.T("checkRoot"), root));
 
             var inputDir = Path.Combine(root, "input");
             var msixs = Directory.Exists(inputDir) ? Directory.GetFiles(inputDir, "*.msix") : new string[0];
-            Emit($"input/ MSIX         : {(msixs.Length > 0 ? string.Join(", ", msixs) : "无（需放入官方 MSIX）")}");
+            Emit(string.Format(Lang.T("checkInput"), msixs.Length > 0 ? string.Join(", ", msixs) : Lang.T("inputNone")));
 
             var msi = Path.Combine(root, "driver", "WaveLinkDriver_3.0.0.466_x64.msi");
-            Emit($"Driver MSI          : {(File.Exists(msi) ? "存在" : "缺失（将自动从 CDN 下载）")}");
+            Emit(string.Format(Lang.T("checkDriver"), File.Exists(msi) ? Lang.T("driverPresent") : Lang.T("driverAbsent")));
 
-            Emit("=== 检查结束 ===");
+            Emit(Lang.T("checkEnd"));
 
             try
             {
