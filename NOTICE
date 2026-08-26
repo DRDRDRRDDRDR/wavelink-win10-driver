@@ -1,0 +1,19 @@
+NOTICE / 合规性说明
+====================
+
+本仓库（wavelink_win10_driver）用于技术研究，与 Elgato / Corsair 无任何关联。
+
+Elgato 专有资产（版权归 Elgato，使用须遵守其许可协议）：
+- driver/WaveLinkDriver_3.0.0.466_x64.msi
+    取自 Elgato 官方公共 CDN：
+    https://edge.elgato.com/egc/windows/ewlw/drivers/WaveLinkDriver_3.0.0.466_x64.msi
+- evidence/inf/*.inf
+    从官方 MSI 内嵌 CAB 提取的安装信息文件（ElgatoUsbAudio / _dfu / _ks / VirtUsbAudioEmu）。
+
+如 Elgato 要求移除上述文件，本仓库将立即删除二进制与 INF，并改为仅提供
+scripts/fetch_driver.bat 下载链接，以遵守其要求。
+
+自创内容（报告、脚本、证书）以 MIT 许可发布，详见 LICENSE。
+
+使用本仓库即表示你理解并同意：仅用于个人研究 / 本地复现，
+不用于商业用途或规避正常的产品授权机制。

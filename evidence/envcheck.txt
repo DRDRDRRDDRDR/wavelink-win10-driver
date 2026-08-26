@@ -1,0 +1,6 @@
+﻿Caption: Microsoft Windows 10 专业版
+Version: 10.0.19045
+Build:   19045
+Arch:    64 位
+WindowsAppRuntime.2 installed: 2.4.0.0 2.4.0.0
+VCLibs.140.00.UWPDesktop installed: 14.0.32530.0 14.0.33321.0 14.0.33519.0 14.0.33728.0 14.0.33728.0

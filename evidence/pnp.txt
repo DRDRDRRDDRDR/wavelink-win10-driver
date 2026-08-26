@@ -1,0 +1,27 @@
+
+Status Class                    FriendlyName                         InstanceId                                                          
+------ -----                    ------------                         ----------                                                          
+OK     AudioEndpoint            Wave Mic 3 (Elgato Virtual Audio)    SWD\MMDEVAPI\{0.0.0.00000000}.{DC6278EB-4CA4-49AE-909E-F26A37C2E3F6}
+OK     AudioEndpoint            Stream Mix (Elgato Virtual Audio)    SWD\MMDEVAPI\{0.0.1.00000000}.{FD85B0A2-93B6-42D3-8D8A-A7377AFCB4AA}
+OK     AudioEndpoint            Aux 2 (Elgato Virtual Audio)         SWD\MMDEVAPI\{0.0.0.00000000}.{F0CE8008-0F21-4402-8960-50819D14DD1B}
+OK     AudioEndpoint            Wave Mic 2 (Elgato Virtual Audio)    SWD\MMDEVAPI\{0.0.0.00000000}.{8C8CFECE-26AB-42F1-9DE8-E3AD2F4634FD}
+OK     AudioEndpoint            SFX (Elgato Virtual Audio)           SWD\MMDEVAPI\{0.0.0.00000000}.{55CC6858-07F3-4BDC-8269-7B150CD06193}
+OK     AudioEndpoint            Browser (Elgato Virtual Audio)       SWD\MMDEVAPI\{0.0.0.00000000}.{2BCE5DDE-CBB7-44B2-964A-8A4944A8E542}
+OK     AudioEndpoint            Recording Mix (Elgato Virtual Audio) SWD\MMDEVAPI\{0.0.1.00000000}.{4E864912-3016-4D0B-B7E7-4765EF2CFC73}
+OK     AudioEndpoint            Music (Elgato Virtual Audio)         SWD\MMDEVAPI\{0.0.0.00000000}.{AE562471-4367-48AF-AA50-AB1121CB53C6}
+OK     ElgatoVirtUsbAudioEmu_sc Elgato Root Device                   ROOT\ELGATO_ROOT_DEVICE\0000                                        
+OK     AudioEndpoint            Personal Mix (Elgato Virtual Audio)  SWD\MMDEVAPI\{0.0.1.00000000}.{F97B2711-5B86-4CE4-AB92-DF61FFEEF6FF}
+OK     SoftwareComponent        Elgato APO                           SWD\DRIVERENUM\ELGATOAPO_COMPONENT&3&3B1D6F4B&0                     
+OK     AudioEndpoint            Voice Chat (Elgato Virtual Audio)    SWD\MMDEVAPI\{0.0.0.00000000}.{C12E8CB3-60E9-49C4-9F65-187115EC4A0E}
+OK     AudioEndpoint            Aux Mix (Elgato Virtual Audio)       SWD\MMDEVAPI\{0.0.1.00000000}.{F83AD1B8-7AEC-4279-9DAB-524092710145}
+OK     AudioEndpoint            Wave Mic 1 (Elgato Virtual Audio)    SWD\MMDEVAPI\{0.0.0.00000000}.{2A85FFCD-C39B-4F46-93A4-76B5960B242B}
+OK     AudioEndpoint            System (Elgato Virtual Audio)        SWD\MMDEVAPI\{0.0.0.00000000}.{AE4FADB9-B0E0-4A62-9130-D19FAC99B7D7}
+OK     MEDIA                    Elgato Virtual Audio                 TUSBAUDIO_ENUM\VID_0FD9&PID_0096&KS\12345678901234                  
+OK     AudioEndpoint            Chat Mix (Elgato Virtual Audio)      SWD\MMDEVAPI\{0.0.1.00000000}.{B2FF411A-6F98-4A92-A865-B3A097C785CC}
+OK     ElgatoUsbAudio_sc        Elgato Virtual Audio                 USB\VID_0FD9&PID_0096\12345678901234                                
+OK     AudioEndpoint            Game (Elgato Virtual Audio)          SWD\MMDEVAPI\{0.0.0.00000000}.{2DB561B0-6D70-4BEA-B0F8-146E5E590591}
+OK     AudioEndpoint            Aux 1 (Elgato Virtual Audio)         SWD\MMDEVAPI\{0.0.0.00000000}.{4668DB37-D763-4A94-B210-44A045776DBE}
+OK     AudioEndpoint            Wave Mic 4 (Elgato Virtual Audio)    SWD\MMDEVAPI\{0.0.0.00000000}.{0214EEC0-9384-49E5-85D9-E43D71273117}
+
+
+
