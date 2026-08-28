@@ -2,8 +2,8 @@ name: Build Release Package
 
 # Triggers:
 #   - push tag v*            : manual release (you must place your MSIX in input/)
-#   - schedule (daily 06:00 UTC): auto-detect new Wave Link Windows release on the
-#                                official release-notes page, download the MSIX from
+#   - schedule (daily 06:00 UTC): auto-detect new Wave Link Windows release via the
+#                                official Elgato Zendesk API, download the MSIX from
 #                                the Elgato CDN, and publish a complete package.
 #   - workflow_dispatch      : same as schedule, but always builds the latest (for validation)
 on:
@@ -50,54 +50,95 @@ jobs:
             exit 0
           }
 
-          try {
-            $sectionUrl = "https://help.elgato.com/hc/en-us/sections/4913442828941-Wave-Link-Release-Notes"
-            Write-Host "Fetching release-notes index: $sectionUrl"
-            $html = (curl.exe -sL -A $ua $sectionUrl) -join "`n"
-            $arts = [regex]::Matches($html, 'href="((?:https://help\.elgato\.com)?/hc/en-us/articles/\d+-Elgato-Wave-Link-[\d-]+-Windows-Release-Notes)"')
-            Write-Host "Candidate Windows article links found: $($arts.Count)"
-            $best = $null; $bestVer = [version]'0.0.0'
-            foreach ($a in $arts) {
-              $url = $a.Groups[1].Value
-              if ($url.StartsWith("/")) { $url = "https://help.elgato.com" + $url }
-              if ($url -match 'Wave-Link-(\d+)-(\d+)-(\d+)-Windows') {
-                $v = [version]"$($Matches[1]).$($Matches[2]).$($Matches[3])"
-                if ($v -gt $bestVer) { $bestVer = $v; $best = $url }
+          function Fetch-Raw {
+            param([string]$Url)
+            Write-Host "Fetching: $Url"
+            $tmp = New-TemporaryFile
+            try {
+              $status = (curl.exe --compressed -sL -A $ua `
+                -H "Accept: application/json, text/html, */*" `
+                -H "Accept-Language: en-US,en;q=0.9" `
+                -o $tmp.FullName -w "%{http_code}" $Url).Trim()
+              $raw = Get-Content -Raw $tmp.FullName
+              Write-Host "  -> HTTP $status | $($raw.Length) bytes"
+              if ($status -ne "200") {
+                Write-Host "  -> head: $($raw.Substring(0,[Math]::Min(200,$raw.Length)))"
+                return $null
               }
+              return $raw
+            } finally {
+              Remove-Item $tmp.FullName -Force -ErrorAction SilentlyContinue
             }
-            if (-not $best) { throw "No Windows release-notes article found (links=$($arts.Count))." }
-            $latest = $bestVer.ToString()
-            Write-Host "Latest Wave Link (Windows): $latest  ($best)"
+          }
 
-            $artHtml = (curl.exe -sL -A $ua $best) -join "`n"
-            $ms = [regex]::Match($artHtml, 'https://edge\.elgato\.com/egc/windows/ewlw/[\d.]+/Stable/Elgato\.WaveLink_[\d.]+_x64\.msix')
-            if (-not $ms.Success) { throw "No x64 MSIX URL found in the release-notes article." }
-            $msixUrl = $ms.Value
-            Write-Host "MSIX: $msixUrl"
-
-            # schedule only releases on a version change; dispatch always releases
-            $should = if ($event -eq "schedule") { ($latest -ne $current) } else { $true }
-            if (-not $should) {
-              Write-Host "No update (current=$current, latest=$latest). Skipping release."
-              Add-Content -Path $env:GITHUB_OUTPUT -Value "should_release=false"
-              exit 0
+          function Fetch-Json($Url) {
+            $raw = Fetch-Raw $Url
+            if ($null -eq $raw) { return $null }
+            try { return ($raw | ConvertFrom-Json) }
+            catch {
+              Write-Host "  -> JSON parse failed; head: $($raw.Substring(0,[Math]::Min(200,$raw.Length)))"
+              return $null
             }
-
-            # download into input/ (git-ignored; only travels inside the release zip)
-            $dest = "input/" + [System.IO.Path]::GetFileName($msixUrl)
-            curl.exe -sL -A $ua -o $dest $msixUrl
-            Write-Host "Downloaded -> $dest"
-
-            # persist the seen version so the next scheduled run does not re-release
-            Set-Content -Path $stateFile -Value $latest -NoNewline
-            Add-Content -Path $env:GITHUB_OUTPUT -Value "should_release=true"
-            Add-Content -Path $env:GITHUB_OUTPUT -Value "release_tag=wavelink-$latest"
-            Add-Content -Path $env:GITHUB_OUTPUT -Value "app_version=$latest"
           }
-          catch {
-            Write-Error ("Detection failed: " + $_.Exception.Message)
-            exit 1
+
+          # The Elgato help center sits behind Akamai, which serves a JS-challenge
+          # page (HTTP 200, no real content) to non-browser clients. The Zendesk
+          # REST API usually slips past that, and the raw zendesk.com host is often
+          # not behind the same front. Try both; one should give us clean JSON.
+          $sectionJson = $null
+          foreach ($apiHost in @("elgato.zendesk.com", "help.elgato.com")) {
+            $j = Fetch-Json "https://$apiHost/api/v2/help_center/en-us/sections/4913442828941/articles.json"
+            if ($j -and $j.articles) { $sectionJson = $j; break }
           }
+          if (-not $sectionJson) { throw "Could not retrieve the release-notes article list from any API host." }
+
+          $best = $null; $bestVer = [version]'0.0.0'
+          foreach ($a in $sectionJson.articles) {
+            if ($a.title -notmatch 'Windows') { continue }
+            if ($a.title -match '(\d+\.\d+(?:\.\d+)?)') {
+              try {
+                $v = [version]$Matches[1]
+                if ($v -gt $bestVer) { $bestVer = $v; $best = $a }
+              } catch {}
+            }
+          }
+          if (-not $best) { throw "No Windows release-notes article found in the API response." }
+          $latest = $bestVer.ToString()
+          $articleId = $best.id
+          Write-Host "Latest Wave Link (Windows): $latest (article id $articleId)"
+
+          $artJson = Fetch-Json "https://help.elgato.com/api/v2/help_center/en-us/articles/$articleId.json"
+          if (-not $artJson) { throw "Could not retrieve article $articleId JSON." }
+          $bodyHtml = $artJson.article.body
+          $ms = [regex]::Match($bodyHtml, 'https://edge\.elgato\.com/egc/windows/ewlw/[\d.]+/Stable/Elgato\.WaveLink_[\d.]+_x64\.msix')
+          if (-not $ms.Success) { throw "No x64 MSIX URL found in the release-notes article body." }
+          $msixUrl = $ms.Value
+          Write-Host "MSIX: $msixUrl"
+
+          # schedule only releases on a version change; dispatch always releases
+          $should = if ($event -eq "schedule") { ($latest -ne $current) } else { $true }
+          if (-not $should) {
+            Write-Host "No update (current=$current, latest=$latest). Skipping release."
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "should_release=false"
+            exit 0
+          }
+
+          # download into input/ (git-ignored; only travels inside the release zip)
+          $dest = "input/" + [System.IO.Path]::GetFileName($msixUrl)
+          curl.exe --compressed -sL -A $ua -o $dest $msixUrl
+          if (-not (Test-Path $dest)) { throw "MSIX download failed (file not created)." }
+          # sanity: MSIX is a ZIP; verify the PK magic bytes and a sane size
+          $bytes = [System.IO.File]::ReadAllBytes($dest)
+          if ($bytes.Length -lt 100KB -or $bytes[0] -ne 0x50 -or $bytes[1] -ne 0x4B) {
+            throw ("Downloaded file is not a valid MSIX (size=" + $bytes.Length + ", magic=" + $bytes[0] + "/" + $bytes[1] + ").")
+          }
+          Write-Host ("Downloaded -> " + $dest + " (" + [math]::Round($bytes.Length/1MB,2) + " MB)")
+
+          # persist the seen version so the next scheduled run does not re-release
+          Set-Content -Path $stateFile -Value $latest -NoNewline
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "should_release=true"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "release_tag=wavelink-$latest"
+          Add-Content -Path $env:GITHUB_OUTPUT -Value "app_version=$latest"
 
       - name: Commit seen app version (auto modes)
         if: steps.check.outputs.should_release == 'true' && github.event_name != 'push'
