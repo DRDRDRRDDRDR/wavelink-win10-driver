@@ -43,54 +43,60 @@ jobs:
             # Manual tag release: user supplies the MSIX in input/
             $ver = "${{ github.ref_name }}"
             Write-Host "Manual tag release: $ver (expecting MSIX in input/)"
-            "should_release=true"  | Out-File -Append $env:GITHUB_OUTPUT
-            "release_tag=$ver"     | Out-File -Append $env:GITHUB_OUTPUT
-            "app_version=$ver"     | Out-File -Append $env:GITHUB_OUTPUT
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "should_release=true"
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "release_tag=$ver"
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "app_version=$ver"
             exit 0
           }
 
-          # Auto modes: scrape the official Wave Link Release Notes for the latest Windows MSIX.
-          $sectionUrl = "https://help.elgato.com/hc/en-us/sections/4913442828941-Wave-Link-Release-Notes"
-          Write-Host "Fetching release-notes index: $sectionUrl"
-          $html = (Invoke-WebRequest -Uri $sectionUrl -UseBasicParsing -TimeoutSec 60).Content
-          $arts = [regex]::Matches($html, 'href="(https://help\.elgato\.com/hc/en-us/articles/\d+-Elgato-Wave-Link-[\d-]+-Windows-Release-Notes)"')
-          $best = $null; $bestVer = [version]'0.0.0'
-          foreach ($a in $arts) {
-            $url = $a.Groups[1].Value
-            if ($url -match 'Wave-Link-(\d+)-(\d+)-(\d+)-Windows') {
-              $v = [version]"$($Matches[1]).$($Matches[2]).$($Matches[3])"
-              if ($v -gt $bestVer) { $bestVer = $v; $best = $url }
+          try {
+            $sectionUrl = "https://help.elgato.com/hc/en-us/sections/4913442828941-Wave-Link-Release-Notes"
+            Write-Host "Fetching release-notes index: $sectionUrl"
+            $html = (Invoke-WebRequest -Uri $sectionUrl -UseBasicParsing -TimeoutSec 120).Content
+            $arts = [regex]::Matches($html, 'href="((?:https://help\.elgato\.com)?/hc/en-us/articles/\d+-Elgato-Wave-Link-[\d-]+-Windows-Release-Notes)"')
+            Write-Host "Candidate Windows article links found: $($arts.Count)"
+            $best = $null; $bestVer = [version]'0.0.0'
+            foreach ($a in $arts) {
+              $url = $a.Groups[1].Value
+              if ($url.StartsWith("/")) { $url = "https://help.elgato.com" + $url }
+              if ($url -match 'Wave-Link-(\d+)-(\d+)-(\d+)-Windows') {
+                $v = [version]"$($Matches[1]).$($Matches[2]).$($Matches[3])"
+                if ($v -gt $bestVer) { $bestVer = $v; $best = $url }
+              }
             }
+            if (-not $best) { throw "No Windows release-notes article found (links=$($arts.Count))." }
+            $latest = $bestVer.ToString()
+            Write-Host "Latest Wave Link (Windows): $latest  ($best)"
+
+            $artHtml = (Invoke-WebRequest -Uri $best -UseBasicParsing -TimeoutSec 120).Content
+            $ms = [regex]::Match($artHtml, 'https://edge\.elgato\.com/egc/windows/ewlw/[\d.]+/Stable/Elgato\.WaveLink_[\d.]+_x64\.msix')
+            if (-not $ms.Success) { throw "No x64 MSIX URL found in the release-notes article." }
+            $msixUrl = $ms.Value
+            Write-Host "MSIX: $msixUrl"
+
+            # schedule only releases on a version change; dispatch always releases
+            $should = if ($event -eq "schedule") { ($latest -ne $current) } else { $true }
+            if (-not $should) {
+              Write-Host "No update (current=$current, latest=$latest). Skipping release."
+              Add-Content -Path $env:GITHUB_OUTPUT -Value "should_release=false"
+              exit 0
+            }
+
+            # download into input/ (git-ignored; only travels inside the release zip)
+            $dest = "input/" + [System.IO.Path]::GetFileName($msixUrl)
+            Invoke-WebRequest -Uri $msixUrl -OutFile $dest -TimeoutSec 300
+            Write-Host "Downloaded -> $dest"
+
+            # persist the seen version so the next scheduled run does not re-release
+            Set-Content -Path $stateFile -Value $latest -NoNewline
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "should_release=true"
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "release_tag=wavelink-$latest"
+            Add-Content -Path $env:GITHUB_OUTPUT -Value "app_version=$latest"
           }
-          if (-not $best) { throw "No Windows release-notes article found on the page." }
-          $latest = $bestVer.ToString()
-          Write-Host "Latest Wave Link (Windows): $latest  ($best)"
-
-          $artHtml = (Invoke-WebRequest -Uri $best -UseBasicParsing -TimeoutSec 60).Content
-          $ms = [regex]::Match($artHtml, 'https://edge\.elgato\.com/egc/windows/ewlw/[\d.]+/Stable/Elgato\.WaveLink_[\d.]+_x64\.msix')
-          if (-not $ms.Success) { throw "No x64 MSIX URL found in the release-notes article." }
-          $msixUrl = $ms.Value
-          Write-Host "MSIX: $msixUrl"
-
-          # schedule only releases on a version change; dispatch always releases
-          $should = if ($event -eq "schedule") { ($latest -ne $current) } else { $true }
-          if (-not $should) {
-            Write-Host "No update (current=$current, latest=$latest). Skipping release."
-            "should_release=false" | Out-File -Append $env:GITHUB_OUTPUT
-            exit 0
+          catch {
+            Write-Error ("Detection failed: " + $_.Exception.Message)
+            exit 1
           }
-
-          # download into input/ (git-ignored; only travels inside the release zip)
-          $dest = "input/" + [System.IO.Path]::GetFileName($msixUrl)
-          Invoke-WebRequest -Uri $msixUrl -OutFile $dest -TimeoutSec 300
-          Write-Host "Downloaded -> $dest"
-
-          # persist the seen version so the next scheduled run does not re-release
-          Set-Content -Path $stateFile -Value $latest -NoNewline
-
-          "should_release=true"        | Out-File -Append $env:GITHUB_OUTPUT
-          "release_tag=wavelink-$latest" | Out-File -Append $env:GITHUB_OUTPUT
-          "app_version=$latest"         | Out-File -Append $env:GITHUB_OUTPUT
 
       - name: Commit seen app version (auto modes)
         if: steps.check.outputs.should_release == 'true' && github.event_name != 'push'
@@ -99,8 +105,13 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add wavelink-app-version.txt
-          git commit -m "chore: track Wave Link app version ${{ steps.check.outputs.app_version }}" | Out-Null
-          git push
+          $diff = git status --porcelain wavelink-app-version.txt
+          if ($diff) {
+            git commit -m "chore: track Wave Link app version ${{ steps.check.outputs.app_version }}"
+            git push
+          } else {
+            Write-Host "State unchanged; nothing to commit."
+          }
 
       - name: Publish GUI installer (self-contained, single-file, win-x64)
         if: steps.check.outputs.should_release == 'true'
