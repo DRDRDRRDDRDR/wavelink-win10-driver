@@ -38,6 +38,7 @@ jobs:
           $stateFile = "wavelink-app-version.txt"
           $current = if (Test-Path $stateFile) { (Get-Content $stateFile -Raw).Trim() } else { "" }
           $event = "${{ github.event_name }}"
+          $ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 
           if ($event -eq "push") {
             # Manual tag release: user supplies the MSIX in input/
@@ -52,7 +53,7 @@ jobs:
           try {
             $sectionUrl = "https://help.elgato.com/hc/en-us/sections/4913442828941-Wave-Link-Release-Notes"
             Write-Host "Fetching release-notes index: $sectionUrl"
-            $html = (Invoke-WebRequest -Uri $sectionUrl -UseBasicParsing -TimeoutSec 120).Content
+            $html = (Invoke-WebRequest -Uri $sectionUrl -UserAgent $ua -UseBasicParsing -TimeoutSec 120).Content
             $arts = [regex]::Matches($html, 'href="((?:https://help\.elgato\.com)?/hc/en-us/articles/\d+-Elgato-Wave-Link-[\d-]+-Windows-Release-Notes)"')
             Write-Host "Candidate Windows article links found: $($arts.Count)"
             $best = $null; $bestVer = [version]'0.0.0'
@@ -68,7 +69,7 @@ jobs:
             $latest = $bestVer.ToString()
             Write-Host "Latest Wave Link (Windows): $latest  ($best)"
 
-            $artHtml = (Invoke-WebRequest -Uri $best -UseBasicParsing -TimeoutSec 120).Content
+            $artHtml = (Invoke-WebRequest -Uri $best -UserAgent $ua -UseBasicParsing -TimeoutSec 120).Content
             $ms = [regex]::Match($artHtml, 'https://edge\.elgato\.com/egc/windows/ewlw/[\d.]+/Stable/Elgato\.WaveLink_[\d.]+_x64\.msix')
             if (-not $ms.Success) { throw "No x64 MSIX URL found in the release-notes article." }
             $msixUrl = $ms.Value
@@ -84,7 +85,7 @@ jobs:
 
             # download into input/ (git-ignored; only travels inside the release zip)
             $dest = "input/" + [System.IO.Path]::GetFileName($msixUrl)
-            Invoke-WebRequest -Uri $msixUrl -OutFile $dest -TimeoutSec 300
+            Invoke-WebRequest -Uri $msixUrl -UserAgent $ua -OutFile $dest -TimeoutSec 300
             Write-Host "Downloaded -> $dest"
 
             # persist the seen version so the next scheduled run does not re-release
