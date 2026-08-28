@@ -1,0 +1,46 @@
+name: Build Release Package
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build self-contained installer (win-x64)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Publish GUI installer (self-contained, single-file, win-x64)
+        run: dotnet publish src/WaveLinkWin10Setup/WaveLinkWin10Setup.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:PublishTrimmed=false -p:DebugType=None -o dist
+
+      - name: Assemble complete package
+        shell: pwsh
+        run: |
+          Copy-Item driver  dist -Recurse -Force
+          Copy-Item input   dist -Recurse -Force
+          Copy-Item scripts dist -Recurse -Force
+
+      - name: Zip package
+        shell: pwsh
+        run: Compress-Archive -Path dist\* -DestinationPath wavelink-win10-driver-complete.zip
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          files: wavelink-win10-driver-complete.zip
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

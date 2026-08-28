@@ -234,6 +234,16 @@ This repo deliberately **excludes** the following Elgato proprietary / large ite
 - GUI-level final verification (play audio, confirm meters move) requires manual operation on your side.
 - Compatibility is empirically verified only on Windows 10 22H2; 1809+ is theoretical, not per-build tested.
 
+## Automated build (GitHub Actions)
+
+The repo ships `.github/workflows/build.yml`: pushing a version tag (e.g. `v1.2.0`) automatically builds the self-contained single-file installer exe on `windows-latest` with .NET 8, bundles `driver/`, `input/`, and `scripts/` into `wavelink-win10-driver-complete.zip`, and creates a GitHub Release attaching that zip.
+
+- Trigger: `git tag vX.Y.Z && git push origin vX.Y.Z`, or manually `Run workflow` in the Actions tab.
+- Credentials: uses the built-in GitHub `GITHUB_TOKEN` (`contents: write`) — **no personal PAT required**.
+- Artifact: the `wavelink-win10-driver-complete.zip` in the Release is the ready-to-use complete package (exe + driver MSI + placeholder `input/`; you still drop your official MSIX into `input/`).
+
+> For an equivalent local build, see `build_exe.ps1`.
+
 ## References
 
 - Install report: `reports/wavelink_driver_install_report.md`

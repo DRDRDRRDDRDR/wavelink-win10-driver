@@ -242,6 +242,16 @@ wavelink_win10_driver/
 - 如需 GUI 交互级最终验证（播放音频确认电平走动），需你侧手动操作。
 - 兼容性仅 Windows 10 22H2 经过实测；1809+ 为基于 INF 的理论支持，未经逐版本实测。
 
+## 自动构建（GitHub Actions）
+
+仓库已内置工作流 `.github/workflows/build.yml`：推送版本标签（如 `v1.2.0`）即自动在 `windows-latest` 上用 .NET 8 构建 self-contained 单文件安装器 exe，把 `driver/`、`input/`、`scripts/` 一并打包成 `wavelink-win10-driver-complete.zip`，并创建 GitHub Release 附上该 zip。
+
+- 触发：`git tag vX.Y.Z && git push origin vX.Y.Z`，或在 Actions 页面手动 `Run workflow`。
+- 凭据：使用 GitHub 内置 `GITHUB_TOKEN`（`contents: write`），**无需任何个人 PAT**。
+- 产物：Release 里的 `wavelink-win10-driver-complete.zip` 即开箱即用的完整安装包（含 exe + 驱动 MSI + 占位 `input/`；官方 MSIX 需你自行放入 `input/`）。
+
+> 本地手动构建等价命令见 `build_exe.ps1`。
+
 ## 参考资料
 
 - 安装报告：`reports/wavelink_driver_install_report.md`
