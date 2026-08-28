@@ -53,7 +53,7 @@ jobs:
           try {
             $sectionUrl = "https://help.elgato.com/hc/en-us/sections/4913442828941-Wave-Link-Release-Notes"
             Write-Host "Fetching release-notes index: $sectionUrl"
-            $html = (Invoke-WebRequest -Uri $sectionUrl -UserAgent $ua -UseBasicParsing -TimeoutSec 120).Content
+            $html = (curl.exe -sL -A $ua $sectionUrl) -join "`n"
             $arts = [regex]::Matches($html, 'href="((?:https://help\.elgato\.com)?/hc/en-us/articles/\d+-Elgato-Wave-Link-[\d-]+-Windows-Release-Notes)"')
             Write-Host "Candidate Windows article links found: $($arts.Count)"
             $best = $null; $bestVer = [version]'0.0.0'
@@ -69,7 +69,7 @@ jobs:
             $latest = $bestVer.ToString()
             Write-Host "Latest Wave Link (Windows): $latest  ($best)"
 
-            $artHtml = (Invoke-WebRequest -Uri $best -UserAgent $ua -UseBasicParsing -TimeoutSec 120).Content
+            $artHtml = (curl.exe -sL -A $ua $best) -join "`n"
             $ms = [regex]::Match($artHtml, 'https://edge\.elgato\.com/egc/windows/ewlw/[\d.]+/Stable/Elgato\.WaveLink_[\d.]+_x64\.msix')
             if (-not $ms.Success) { throw "No x64 MSIX URL found in the release-notes article." }
             $msixUrl = $ms.Value
@@ -85,7 +85,7 @@ jobs:
 
             # download into input/ (git-ignored; only travels inside the release zip)
             $dest = "input/" + [System.IO.Path]::GetFileName($msixUrl)
-            Invoke-WebRequest -Uri $msixUrl -UserAgent $ua -OutFile $dest -TimeoutSec 300
+            curl.exe -sL -A $ua -o $dest $msixUrl
             Write-Host "Downloaded -> $dest"
 
             # persist the seen version so the next scheduled run does not re-release
