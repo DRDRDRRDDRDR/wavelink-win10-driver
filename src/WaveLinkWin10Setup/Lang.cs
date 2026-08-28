@@ -128,6 +128,22 @@ namespace WaveLinkWin10Setup
             Zh["driverPresent"] = "存在";
             Zh["driverAbsent"] = "缺失（将自动从 CDN 下载）";
 
+            // 更新按钮 / Update button
+            Zh["btnUpdate"] = "检查并更新 Wave Link";
+            Zh["updCheck"] = "正在查询 Elgato 官方最新 Wave Link 版本 ...";
+            Zh["updLatest"] = "最新可用版本: ";
+            Zh["updInstalled"] = "当前已安装版本: ";
+            Zh["updSame"] = "已是最新（{0}），无需更新。";
+            Zh["updDownload"] = "正在下载最新 MSIX（约 180 MB，请耐心等待）...";
+            Zh["updDownloaded"] = "已下载到: ";
+            Zh["updProgress"] = "下载进度: {0} / {1} MB";
+            Zh["updStart"] = "即将以管理员身份运行安装（打补丁 + 驱动）...";
+            Zh["updNone"] = "无需更新。";
+            Zh["updNoArticle"] = "未找到 Elgato 最新版本文章。";
+            Zh["updNoBody"] = "无法读取版本文章正文。";
+            Zh["updNoMsix"] = "文章正文中未找到 MSIX 下载链接。";
+            Zh["updTooSmall"] = "下载文件过小，可能被拦截（非真实 MSIX）";
+
             // ---------------- English ----------------
             En["title"] = "Wave Link 3.x · Windows 10 Installer";
             En["langLabel"] = "Language";
@@ -196,6 +212,22 @@ namespace WaveLinkWin10Setup
             En["inputNone"] = "none (put official MSIX)";
             En["driverPresent"] = "present";
             En["driverAbsent"] = "missing (will auto-download from CDN)";
+
+            // Update button
+            En["btnUpdate"] = "Check && Update Wave Link";
+            En["updCheck"] = "Querying Elgato for the latest Wave Link version ...";
+            En["updLatest"] = "Latest available version: ";
+            En["updInstalled"] = "Currently installed version: ";
+            En["updSame"] = "Already up to date ({0}); no update needed.";
+            En["updDownload"] = "Downloading the latest MSIX (~180 MB, please wait) ...";
+            En["updDownloaded"] = "Downloaded to: ";
+            En["updProgress"] = "Download progress: {0} / {1} MB";
+            En["updStart"] = "About to install as admin (patch + driver) ...";
+            En["updNone"] = "No update needed.";
+            En["updNoArticle"] = "Could not find Elgato's latest-version article.";
+            En["updNoBody"] = "Could not read the version article body.";
+            En["updNoMsix"] = "No MSIX download link found in the article body.";
+            En["updTooSmall"] = "Downloaded file too small; likely blocked (not a real MSIX)";
         }
     }
 }

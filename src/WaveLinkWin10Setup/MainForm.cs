@@ -18,6 +18,7 @@ namespace WaveLinkWin10Setup
         Button btnInstallDriver;
         Button btnVerify;
         Button btnCheck;
+        Button btnUpdate;
         TextBox txtLog;
         Label lblLang;
         ComboBox cboLang;
@@ -92,12 +93,15 @@ namespace WaveLinkWin10Setup
             btnVerify.Click += (s, e) => DoRun("verify");
             btnCheck.Click += (s, e) => { Log(""); Installer.EnvCheckGui(Log); };
 
+            btnUpdate = new Button { Left = 12, Top = 140, Width = 230, Height = 28, Text = Lang.T("btnUpdate") };
+            btnUpdate.Click += (s, e) => StartUpdate();
+
             txtLog = new TextBox
             {
                 Left = 12,
-                Top = 148,
+                Top = 176,
                 Width = 736,
-                Height = 420,
+                Height = 392,
                 Multiline = true,
                 ReadOnly = true,
                 ScrollBars = ScrollBars.Vertical,
@@ -105,7 +109,7 @@ namespace WaveLinkWin10Setup
             };
 
             Controls.AddRange(new Control[] { lblMsix, txtMsix, btnBrowse, lblLang, cboLang, chkSkipApp, chkSkipDriver,
-                lblMinBuild, numMinBuild, btnRunAll, btnInstallApp, btnInstallDriver, btnVerify, btnCheck, txtLog });
+                lblMinBuild, numMinBuild, btnRunAll, btnInstallApp, btnInstallDriver, btnVerify, btnCheck, btnUpdate, txtLog });
 
             Log(Lang.T("tipLog"));
             Log(Lang.T("stepLog"));
@@ -125,6 +129,7 @@ namespace WaveLinkWin10Setup
             btnInstallDriver.Text = Lang.T("btnInstallDriver");
             btnVerify.Text = Lang.T("btnVerify");
             btnCheck.Text = Lang.T("btnCheck");
+            btnUpdate.Text = Lang.T("btnUpdate");
             lblLang.Text = Lang.T("langLabel");
             cboLang.SelectedIndex = Lang.Mode == "zh" ? 0 : 1;
         }
@@ -194,6 +199,44 @@ namespace WaveLinkWin10Setup
             {
                 Log(Lang.T("errPrefix") + ex.Message);
             }
+        }
+
+        /// <summary>
+        /// "Check &amp; Update" button: detect the latest Wave Link from Elgato, download it in the
+        /// background, then launch an elevated install of the downloaded MSIX.
+        /// </summary>
+        void StartUpdate()
+        {
+            btnUpdate.Enabled = false;
+            Log("");
+            Task.Run(async () =>
+            {
+                string local = "";
+                try { local = await Updater.UpdateAsync(Log); }
+                catch (Exception ex) { Log(Lang.T("errPrefix") + ex.Message); }
+
+                try
+                {
+                    if (!string.IsNullOrWhiteSpace(local))
+                    {
+                        this.Invoke(new Action(() =>
+                        {
+                            txtMsix.Text = local;
+                            Log(Lang.T("updStart"));
+                            RunElevated("all");
+                        }));
+                    }
+                    else
+                    {
+                        Log(Lang.T("updNone"));
+                    }
+                }
+                catch (Exception ex) { Log(Lang.T("errPrefix") + ex.Message); }
+                finally
+                {
+                    try { this.Invoke(new Action(() => btnUpdate.Enabled = true)); } catch { }
+                }
+            });
         }
     }
 }
