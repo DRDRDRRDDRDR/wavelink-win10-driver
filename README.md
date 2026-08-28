@@ -244,11 +244,15 @@ wavelink_win10_driver/
 
 ## 自动构建（GitHub Actions）
 
-仓库已内置工作流 `.github/workflows/build.yml`：推送版本标签（如 `v1.2.0`）即自动在 `windows-latest` 上用 .NET 8 构建 self-contained 单文件安装器 exe，把 `driver/`、`input/`、`scripts/` 一并打包成 `wavelink-win10-driver-complete.zip`，并创建 GitHub Release 附上该 zip。
+仓库已内置工作流 `.github/workflows/build.yml`，支持三种触发：
 
-- 触发：`git tag vX.Y.Z && git push origin vX.Y.Z`，或在 Actions 页面手动 `Run workflow`。
+1. **官网更新自动打包（默认）**：每日 06:00 UTC 定时抓取 [Wave Link Release Notes](https://help.elgato.com/hc/en-us/sections/4913442828941-Wave-Link-Release-Notes)，解析最新 Windows 版本的 MSIX 直链，从 Elgato CDN 下载到 `input/`，自动构建并发布完整包到 GitHub Release（tag 形如 `wavelink-3.2.10`）。版本去重靠 `wavelink-app-version.txt`。
+2. **手动验证**：在 Actions 页面点 `Run workflow`，立即按当前最新版本构建发版（不受去重限制，便于验证）。
+3. **手动打 tag**：`git tag vX.Y.Z && git push origin vX.Y.Z`，由你自行在 `input/` 放置 MSIX 后出包。
+
+- 产物：Release 里的 `wavelink-win10-driver-complete.zip` = exe + 官方驱动 MSI + 官方 MSIX + scripts，开箱即用。
 - 凭据：使用 GitHub 内置 `GITHUB_TOKEN`（`contents: write`），**无需任何个人 PAT**。
-- 产物：Release 里的 `wavelink-win10-driver-complete.zip` 即开箱即用的完整安装包（含 exe + 驱动 MSI + 占位 `input/`；官方 MSIX 需你自行放入 `input/`）。
+- 合规：MSIX 为 Elgato 专有，仅在构建时从官方 CDN 拉取并打进 Release 压缩包，**不单独再托管、不修改**。
 
 > 本地手动构建等价命令见 `build_exe.ps1`。
 

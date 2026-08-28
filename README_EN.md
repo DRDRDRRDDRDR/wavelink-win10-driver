@@ -236,11 +236,15 @@ This repo deliberately **excludes** the following Elgato proprietary / large ite
 
 ## Automated build (GitHub Actions)
 
-The repo ships `.github/workflows/build.yml`: pushing a version tag (e.g. `v1.2.0`) automatically builds the self-contained single-file installer exe on `windows-latest` with .NET 8, bundles `driver/`, `input/`, and `scripts/` into `wavelink-win10-driver-complete.zip`, and creates a GitHub Release attaching that zip.
+The repo ships `.github/workflows/build.yml` with three triggers:
 
-- Trigger: `git tag vX.Y.Z && git push origin vX.Y.Z`, or manually `Run workflow` in the Actions tab.
-- Credentials: uses the built-in GitHub `GITHUB_TOKEN` (`contents: write`) — **no personal PAT required**.
-- Artifact: the `wavelink-win10-driver-complete.zip` in the Release is the ready-to-use complete package (exe + driver MSI + placeholder `input/`; you still drop your official MSIX into `input/`).
+1. **Auto on official update (default)**: daily at 06:00 UTC it scrapes the [Wave Link Release Notes](https://help.elgato.com/hc/en-us/sections/4913442828941-Wave-Link-Release-Notes), extracts the MSIX direct link for the latest Windows version, downloads it from the Elgato CDN into `input/`, then builds and publishes the complete package to a GitHub Release (tag like `wavelink-3.2.10`). De-duplication uses `wavelink-app-version.txt`.
+2. **Manual validation**: click `Run workflow` in the Actions tab to build & release the current latest immediately (ignores de-duplication; handy for testing).
+3. **Manual tag**: `git tag vX.Y.Z && git push origin vX.Y.Z` — you supply the MSIX in `input/` first.
+
+- Artifact: `wavelink-win10-driver-complete.zip` in the Release = exe + official driver MSI + official MSIX + scripts, ready to use.
+- Credentials: built-in GitHub `GITHUB_TOKEN` (`contents: write`) — **no personal PAT required**.
+- Compliance: the MSIX is Elgato proprietary; it is only fetched from the official CDN at build time and bundled into the Release archive — never re-hosted standalone or modified.
 
 > For an equivalent local build, see `build_exe.ps1`.
 
