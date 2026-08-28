@@ -3,7 +3,9 @@
 > ⚠️ **免责声明**：本项目与 Elgato / Corsair 无任何关联，仅用于技术研究、兼容性验证与本地复现。
 > 所有 Elgato 专有资产（驱动 MSI、INF、MSIX 安装包）的版权归 Elgato 所有，使用须遵守其许可协议。
 > 不建议用于商业用途或规避正常的产品授权机制。详见 [`NOTICE`](./NOTICE)。
-> 英文说明见 [README_EN.md](./README_EN.md)；原理与手动步骤见 [FAQ.md](./FAQ.md)。
+> 英文说明见 [README_EN.md](./README_EN.md)；原理与手动步骤见 [FAQ.md](./FAQ.md).
+
+> 📦 **仓库分工**：本仓库为**补丁仓库**（源码 / 驱动 / 脚本 / 文档）；**自动检测 Elgato 最新 MSIX 并打包发版**已移至 [`wavelink-win10-autorelease`](https://github.com/DRDRDRRDDRDR/wavelink-win10-autorelease)。普通用户请到那个仓库下载含 MSIX 的完整包。
 
 ---
 
@@ -242,17 +244,21 @@ wavelink_win10_driver/
 - 如需 GUI 交互级最终验证（播放音频确认电平走动），需你侧手动操作。
 - 兼容性仅 Windows 10 22H2 经过实测；1809+ 为基于 INF 的理论支持，未经逐版本实测。
 
-## 自动构建（GitHub Actions）
+## 自动构建与自动发版（GitHub Actions 已拆分）
 
-仓库已内置工作流 `.github/workflows/build.yml`，支持三种触发：
+本仓库是**补丁仓库**，只负责构建并发布「打过补丁的安装器」；**自动检测 Elgato 最新 MSIX + 拼完整包 + 发版**已拆分到独立仓库
+[`wavelink-win10-autorelease`](https://github.com/DRDRDRRDDRDR/wavelink-win10-autorelease)（每日 06:00 UTC 自动运行，原理与链接见该仓库 README）。
 
-1. **官网更新自动打包（默认）**：每日 06:00 UTC 定时抓取 [Wave Link Release Notes](https://help.elgato.com/hc/en-us/sections/4913442828941-Wave-Link-Release-Notes)，解析最新 Windows 版本的 MSIX 直链，从 Elgato CDN 下载到 `input/`，自动构建并发布完整包到 GitHub Release（tag 形如 `wavelink-3.2.10`）。版本去重靠 `wavelink-app-version.txt`。
-2. **手动验证**：在 Actions 页面点 `Run workflow`，立即按当前最新版本构建发版（不受去重限制，便于验证）。
-3. **手动打 tag**：`git tag vX.Y.Z && git push origin vX.Y.Z`，由你自行在 `input/` 放置 MSIX 后出包。
+### 本仓库工作流（`.github/workflows/build.yml`）
+- 触发：打 tag（`vX.Y.Z`）或手动 `workflow_dispatch`。
+- 动作：`dotnet publish` 构建自包含安装器 exe，连同 `driver/` 打成 `wavelink-patch-bundle.zip` 发布到本仓库 Release。
+- 这是「补丁产物」（安装器 + 驱动），**不含** Elgato 的 MSIX。
 
-- 产物：Release 里的 `wavelink-win10-driver-complete.zip` = exe + 官方驱动 MSI + 官方 MSIX + scripts，开箱即用。
-- 凭据：使用 GitHub 内置 `GITHUB_TOKEN`（`contents: write`），**无需任何个人 PAT**。
-- 合规：MSIX 为 Elgato 专有，仅在构建时从官方 CDN 拉取并打进 Release 压缩包，**不单独再托管、不修改**。
+### 完整安装包（含 MSIX）在哪里？
+由 `wavelink-win10-autorelease` 自动生成：它克隆本仓库构建安装器、抓取官网最新 MSIX、拼成完整包后发版（tag 形如 `wavelink-3.2.10`）。普通用户直接去那个仓库下载完整包即可。
+
+- 凭据：均用 GitHub 内置 `GITHUB_TOKEN`（`contents: write`），无需个人 PAT。
+- 合规：MSIX 为 Elgato 专有，仅在构建时从官方 CDN 拉取并打进 Release 压缩包，不单独再托管、不修改。
 
 > 本地手动构建等价命令见 `build_exe.ps1`。
 

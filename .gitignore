@@ -23,5 +23,5 @@ dist/
 src/WaveLinkWin10Setup/bin/
 src/WaveLinkWin10Setup/obj/
 
-# Local complete-package zip (produced by build_exe.ps1 / workflow; distributed via Releases)
-wavelink-win10-driver-complete.zip
+# Local patch bundle (produced by build workflow; distributed via Releases)
+wavelink-patch-bundle.zip

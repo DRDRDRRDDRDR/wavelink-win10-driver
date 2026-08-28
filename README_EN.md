@@ -234,16 +234,20 @@ This repo deliberately **excludes** the following Elgato proprietary / large ite
 - GUI-level final verification (play audio, confirm meters move) requires manual operation on your side.
 - Compatibility is empirically verified only on Windows 10 22H2; 1809+ is theoretical, not per-build tested.
 
-## Automated build (GitHub Actions)
+## Automated build & auto-release (GitHub Actions split)
 
-The repo ships `.github/workflows/build.yml` with three triggers:
+This repo is the **patch repo** — it only builds and publishes the patched installer. The **auto-detection of the latest Elgato MSIX + bundling + releasing** has been moved to a separate repo:
+[`wavelink-win10-autorelease`](https://github.com/DRDRDRRDDRDR/wavelink-win10-autorelease) (runs daily at 06:00 UTC; see that repo's README for the mechanism and links).
 
-1. **Auto on official update (default)**: daily at 06:00 UTC it scrapes the [Wave Link Release Notes](https://help.elgato.com/hc/en-us/sections/4913442828941-Wave-Link-Release-Notes), extracts the MSIX direct link for the latest Windows version, downloads it from the Elgato CDN into `input/`, then builds and publishes the complete package to a GitHub Release (tag like `wavelink-3.2.10`). De-duplication uses `wavelink-app-version.txt`.
-2. **Manual validation**: click `Run workflow` in the Actions tab to build & release the current latest immediately (ignores de-duplication; handy for testing).
-3. **Manual tag**: `git tag vX.Y.Z && git push origin vX.Y.Z` — you supply the MSIX in `input/` first.
+### This repo's workflow (`.github/workflows/build.yml`)
+- Triggers: push a tag (`vX.Y.Z`) or manual `workflow_dispatch`.
+- Action: `dotnet publish` builds the self-contained installer exe, bundles it with `driver/` into `wavelink-patch-bundle.zip`, and publishes to this repo's Release.
+- This is the "patch artifact" (installer + driver) — it does **not** contain Elgato's MSIX.
 
-- Artifact: `wavelink-win10-driver-complete.zip` in the Release = exe + official driver MSI + official MSIX + scripts, ready to use.
-- Credentials: built-in GitHub `GITHUB_TOKEN` (`contents: write`) — **no personal PAT required**.
+### Where is the complete package (with MSIX)?
+It is generated automatically by `wavelink-win10-autorelease`: it clones this repo to build the installer, fetches the latest MSIX from the official site, assembles the complete package, and releases it (tag like `wavelink-3.2.10`). Regular users should just download the complete package from that repo.
+
+- Credentials: GitHub built-in `GITHUB_TOKEN` (`contents: write`) — no personal PAT required.
 - Compliance: the MSIX is Elgato proprietary; it is only fetched from the official CDN at build time and bundled into the Release archive — never re-hosted standalone or modified.
 
 > For an equivalent local build, see `build_exe.ps1`.
