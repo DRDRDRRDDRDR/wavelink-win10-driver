@@ -1,0 +1,52 @@
+name: Build & release installer (exe)
+
+# Repo role: wavelink-win10-driver is the canonical SOURCE/BUILD repo for the patched
+# Wave Link 3.x on Windows 10 installer. This workflow compiles the GUI installer from
+# src/WaveLinkWin10Setup and publishes the self-contained exe as a release asset.
+# The full bundle (installer + driver + official MSIX) is assembled in wavelink-win10-autorelease.
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag, e.g. wavelink-3.2.10-fixed4'
+        required: false
+        default: ''
+  push:
+    tags:
+      - 'wavelink-*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build self-contained installer (win-x64)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Publish installer (self-contained, single-file, win-x64)
+        run: dotnet publish src/WaveLinkWin10Setup/WaveLinkWin10Setup.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:PublishTrimmed=false -p:DebugType=None -o dist
+
+      - name: Zip installer
+        shell: pwsh
+        run: Compress-Archive -Path dist\* -DestinationPath wavelink-win10-installer.zip
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.release_tag != '' && github.event.inputs.release_tag || github.ref_name }}
+          name: Wave Link Win10 Installer ${{ github.event.inputs.release_tag != '' && github.event.inputs.release_tag || github.ref_name }}
+          files: wavelink-win10-installer.zip
+          body: |
+            Automated build of the Wave Link 3.x on Windows 10 patched installer (self-contained, no .NET runtime required).
+
+            Built from the committed source in this repo (src/WaveLinkWin10Setup). This release contains the installer exe only; the complete package (installer + driver + official MSIX) is published in the wavelink-win10-autorelease repo.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
