@@ -19,6 +19,8 @@ namespace WaveLinkWin10Setup
         Button btnVerify;
         Button btnCheck;
         Button btnUpdate;
+        ProgressBar progBar;
+        Label lblStatus;
         TextBox txtLog;
         Label lblLang;
         ComboBox cboLang;
@@ -96,6 +98,9 @@ namespace WaveLinkWin10Setup
             btnUpdate = new Button { Left = 12, Top = 140, Width = 230, Height = 28, Text = Lang.T("btnUpdate") };
             btnUpdate.Click += (s, e) => StartUpdate();
 
+            progBar = new ProgressBar { Left = 254, Top = 140, Width = 380, Height = 22, Minimum = 0, Maximum = 100, Value = 0, Style = ProgressBarStyle.Continuous };
+            lblStatus = new Label { Left = 642, Top = 140, Width = 106, Height = 22, Text = "0%", TextAlign = System.Drawing.ContentAlignment.MiddleLeft };
+
             txtLog = new TextBox
             {
                 Left = 12,
@@ -109,7 +114,7 @@ namespace WaveLinkWin10Setup
             };
 
             Controls.AddRange(new Control[] { lblMsix, txtMsix, btnBrowse, lblLang, cboLang, chkSkipApp, chkSkipDriver,
-                lblMinBuild, numMinBuild, btnRunAll, btnInstallApp, btnInstallDriver, btnVerify, btnCheck, btnUpdate, txtLog });
+                lblMinBuild, numMinBuild, btnRunAll, btnInstallApp, btnInstallDriver, btnVerify, btnCheck, btnUpdate, progBar, lblStatus, txtLog });
 
             Log(Lang.T("tipLog"));
             Log(Lang.T("stepLog"));
@@ -180,25 +185,75 @@ namespace WaveLinkWin10Setup
             }
         }
 
+        /// <summary>
+        /// Runs the install/verify flow on a background thread so the UI stays responsive
+        /// (the previous version called Installer.Run synchronously on the UI thread, which
+        /// blocked the message loop during the long PowerShell/msiexec steps and made the
+        /// window report "未响应"). Progress is reported to the progress bar via IProgress.
+        /// </summary>
         void DoRun(string mode)
         {
-            try
+            SetControlsEnabled(false);
+            SetBusy(true);
+            Action<int> progress = SetProgress;
+            Task.Run(() =>
             {
-                Log("");
-                if (mode == "verify")
+                try
                 {
-                    Installer.VerifyOnly(Log);
+                    Log("");
+                    if (mode == "verify")
+                        Installer.VerifyOnly(Log, progress);
+                    else
+                        Installer.Run(mode, txtMsix.Text, (int)numMinBuild.Value,
+                            chkSkipApp.Checked, chkSkipDriver.Checked, Log, progress);
+                    SetProgress(100);
+                    SetBusy(false);
                 }
-                else
+                catch (Exception ex)
                 {
-                    Installer.Run(mode, txtMsix.Text, (int)numMinBuild.Value,
-                        chkSkipApp.Checked, chkSkipDriver.Checked, Log);
+                    Log(Lang.T("errPrefix") + ex.Message);
+                    SetProgress(0);
+                    SetBusy(false);
                 }
-            }
-            catch (Exception ex)
-            {
-                Log(Lang.T("errPrefix") + ex.Message);
-            }
+                finally
+                {
+                    try { this.Invoke(new Action(() => SetControlsEnabled(true))); } catch { }
+                }
+            });
+        }
+
+        /// <summary>Enable/disable all interactive controls during a run.</summary>
+        void SetControlsEnabled(bool enabled)
+        {
+            if (InvokeRequired) { Invoke(new Action<bool>(SetControlsEnabled), enabled); return; }
+            btnRunAll.Enabled = enabled;
+            btnInstallApp.Enabled = enabled;
+            btnInstallDriver.Enabled = enabled;
+            btnVerify.Enabled = enabled;
+            btnCheck.Enabled = enabled;
+            btnUpdate.Enabled = enabled;
+            btnBrowse.Enabled = enabled;
+            cboLang.Enabled = enabled;
+            chkSkipApp.Enabled = enabled;
+            chkSkipDriver.Enabled = enabled;
+            numMinBuild.Enabled = enabled;
+        }
+
+        /// <summary>Marquee mode while a step of unknown duration is in flight.</summary>
+        void SetBusy(bool busy)
+        {
+            if (progBar.InvokeRequired) { progBar.Invoke(new Action<bool>(SetBusy), busy); return; }
+            progBar.Style = busy ? ProgressBarStyle.Marquee : ProgressBarStyle.Continuous;
+            if (busy) lblStatus.Text = Lang.T("lblProgress") + " ...";
+        }
+
+        /// <summary>Set the progress bar to a concrete percentage (0-100).</summary>
+        void SetProgress(int pct)
+        {
+            if (progBar.InvokeRequired) { progBar.Invoke(new Action<int>(SetProgress), pct); return; }
+            progBar.Style = ProgressBarStyle.Continuous;
+            progBar.Value = Math.Max(0, Math.Min(100, pct));
+            lblStatus.Text = Lang.T("lblProgress") + " " + pct + "%";
         }
 
         /// <summary>

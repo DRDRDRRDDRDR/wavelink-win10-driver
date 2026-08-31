@@ -91,7 +91,10 @@ namespace WaveLinkWin10Setup
             Zh["enableDev"] = "启用 Windows 开发者模式 ...";
             Zh["patchRepack"] = "补丁重打包（MinVersion -> 10.0.{0}.0） ...";
             Zh["patchNoOut"] = "补丁未产生输出: ";
-            Zh["installPatched"] = "安装补丁后 MSIX（开发者模式免签名） ...";
+            Zh["installPatched"] = "安装补丁后 MSIX（开发者模式 + 自签证书） ...";
+            Zh["signing"] = "用自签证书签名补丁 MSIX（CN=WaveLinkPatch）...";
+            Zh["noSigntool"] = "未找到 signtool.exe（需 Windows 10 SDK）。";
+            Zh["signTool"] = "签名工具: ";
             Zh["driverMissingFetch"] = "驱动 MSI 缺失，尝试 fetch_driver.bat 下载 ...";
             Zh["driverMissing"] = "驱动 MSI 缺失: ";
             Zh["installDriverMsi"] = "安装驱动 MSI（原生宿主 /qn） ...";
@@ -110,11 +113,18 @@ namespace WaveLinkWin10Setup
             Zh["cannotStartMsiexec"] = "无法启动 msiexec。";
             Zh["driverFail"] = "驱动 MSI 失败，退出码 {0}。详见 {1}";
             Zh["driverOk"] = "驱动 MSI 安装成功 (exit 0)。";
+            Zh["driverAlready"] = "驱动服务已在运行，跳过安装。";
+            Zh["driverMsiExit"] = "驱动 MSI 退出码: {0}";
+            Zh["driverMsiError"] = "驱动 MSI 执行出错: ";
+            Zh["driverPnpFallback"] = "MSI 未生成驱动服务，改用 pnputil 强制安装内置驱动包 ...";
+            Zh["driverNoPnpDir"] = "未找到内置驱动目录 driver/elgato，无法回退。";
             Zh["verifyHeader"] = "验证服务 ...";
             Zh["verifyAppx"] = "  Appx Elgato.WaveLink : ";
             Zh["verifyWarn"] = "警告：部分服务未运行，请检查上方输出与日志。";
             Zh["cannotStart"] = "无法启动: ";
             Zh["exitCode"] = "{0} 退出码 {1}";
+            Zh["lblProgress"] = "进度";
+            Zh["procTimeout"] = "进程 {0} 超过 {1} 分钟未结束，已强制中止（可能底层卡死）。";
 
             Zh["checkHeader"] = "=== Wave Link Win10 Setup - 环境检查 (--check) ===";
             Zh["checkOs"] = "OS build            : {0} ({1})";
@@ -176,7 +186,10 @@ namespace WaveLinkWin10Setup
             En["enableDev"] = "Enabling Windows Developer Mode ...";
             En["patchRepack"] = "Patching & repacking (MinVersion -> 10.0.{0}.0) ...";
             En["patchNoOut"] = "Patch produced no output: ";
-            En["installPatched"] = "Installing patched MSIX (Developer Mode, unsigned) ...";
+            En["installPatched"] = "Installing patched MSIX (Developer Mode + self-signed cert) ...";
+            En["signing"] = "Signing patched MSIX with self-signed cert (CN=WaveLinkPatch) ...";
+            En["noSigntool"] = "signtool.exe not found (Windows 10 SDK required).";
+            En["signTool"] = "Sign tool: ";
             En["driverMissingFetch"] = "Driver MSI missing, trying fetch_driver.bat ...";
             En["driverMissing"] = "Driver MSI missing: ";
             En["installDriverMsi"] = "Installing driver MSI (native host /qn) ...";
@@ -195,11 +208,18 @@ namespace WaveLinkWin10Setup
             En["cannotStartMsiexec"] = "Cannot start msiexec.";
             En["driverFail"] = "Driver MSI failed, exit code {0}. See {1}";
             En["driverOk"] = "Driver MSI installed (exit 0).";
+            En["driverAlready"] = "Driver services already running; skipping install.";
+            En["driverMsiExit"] = "Driver MSI exit code: {0}";
+            En["driverMsiError"] = "Driver MSI execution error: ";
+            En["driverPnpFallback"] = "MSI did not create driver services; falling back to pnputil for bundled driver packages ...";
+            En["driverNoPnpDir"] = "Bundled driver directory driver/elgato not found; cannot fall back.";
             En["verifyHeader"] = "Verifying services ...";
             En["verifyAppx"] = "  Appx Elgato.WaveLink : ";
             En["verifyWarn"] = "Warning: some services are not running; check the output and logs above.";
             En["cannotStart"] = "Cannot start: ";
             En["exitCode"] = "{0} exit code {1}";
+            En["lblProgress"] = "Progress";
+            En["procTimeout"] = "Process {0} did not finish within {1} minutes; forcibly aborted (possible underlying hang).";
 
             En["checkHeader"] = "=== Wave Link Win10 Setup - Environment Check (--check) ===";
             En["checkOs"] = "OS build            : {0} ({1})";
