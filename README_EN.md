@@ -1,260 +1,267 @@
-# Force-install Elgato Wave Link 3.x on Windows 10 — End-to-end Research / Reproduction Kit
+# Wave Link 3.x on Windows 10: installer and patch source
 
-> ⚠️ **Disclaimer**: This project is not affiliated with Elgato / Corsair. It is for technical research, compatibility verification, and local reproduction only.
-> All Elgato proprietary assets (driver MSI, INF, MSIX package) are copyrighted by Elgato and must be used in accordance with their license.
-> Not intended for commercial use or for circumventing normal product licensing. See [`NOTICE`](./NOTICE).
-> 中文说明见 [README.md](./README.md). Principles and manual steps are in [FAQ_EN.md](./FAQ_EN.md).
+Elgato ships Wave Link 3 for Windows as a Windows 11–only package: the MSIX `AppxManifest.xml` declares `MinVersion="10.0.22000.0"`, so the AppX installer refuses it on Windows 10. Even after it installs, the app asks Elgato's server for the audio driver at startup and the server returns an empty device list for the `osVersion` that Windows 10 reports. The UI sits on "Install driver" and never moves.
 
----
+Both layers have to be handled separately:
 
-## Abstract
+1. Lower the manifest's `MinVersion` to a Windows 10 build, rewrite the `<Identity>` Publisher, drop the now-invalid `AppxSignature.p7x`, repack, install.
+2. Skip the server-side delivery path entirely and install the official driver MSI straight into the system.
 
-Elgato Wave Link 3.x is officially Windows 11 only. This repository provides the **end-to-end** artifact set to get it running on **Windows 10** — from "the app won't install" to "the driver is ready":
+The driver binaries themselves carry no Windows 11 gate. That is what makes the whole thing work.
 
-1. **Step 0 (the app)**: lower the MSIX `MinVersion=22000` (Win11 gate) to Windows 10, repack, and install unsigned under Developer Mode.
-2. **Step 1 (the driver)**: bypass the "server does not push the driver" block and force-install the official audio driver, then verify.
+This is the **patch repository**: installer source, the official driver MSI, scripts, reports, docs. Detecting new upstream releases and publishing bundles lives in the companion repo [`wavelink-win10-autorelease`](https://github.com/DRDRDRRDDRDR/wavelink-win10-autorelease).
 
-**No Elgato proprietary app binaries are shipped** (you supply the MSIX locally — see `input/`); only research artifacts, scripts, and the official public-CDN driver (~3 MB) are included.
+Not affiliated with Elgato or Corsair. Asset licensing is covered in [NOTICE](./NOTICE).
 
-## Background
+## Upstream state
 
-Elgato Wave Link 3.x targets Windows 11 only (MSIX `MinVersion=22000`). On **Windows 10 22H2 (19045)** the app hangs at "Install driver". Root cause: at runtime Wave Link queries the server `device-update-check.php`, and for `osVersion=10.0.19045.0` the server returns an empty list (`appDevices:[]`), so the audio driver is never delivered.
+Queried against the Elgato Zendesk API (`elgato.zendesk.com`) on 2026-10-09: the newest Windows build is **Wave Link 3.3**, released 16 September 2026, article id `50957117157265`.
 
-Reverse-engineering and live testing confirm the block exists in only two layers (MSIX version gate + server-side driver delivery), while **the driver binaries themselves are open to Windows 10**. This repo ships the full artifact set and one-click scripts to bypass both.
+- x64 package: `https://edge.elgato.com/egc/windows/ewlw/3.3/Stable/Elgato.WaveLink_3.3.0.4529_x64.msix`
+- 195,150,702 bytes (186.11 MB), SHA256 `50DDDC68ACBB3C95F193B9A3A56F1EDE1C7D575E91423D5BBA597ECAD88B04C9`
+- Wave Link 3 is free and works with non-Elgato microphones. Wave Link 2 is end of life.
+- 3.3.0.4529 supersedes the previously bundled 3.2.10.4073.
 
-## Compatibility Scope
+What changed in 3.3 is listed in [FAQ_EN.md](./FAQ_EN.md).
 
-Based on the OS-version decorations found in the 4 INF files embedded in the driver MSI (see `evidence/inf/`):
+## Compatibility
+
+The driver MSI contains four INF packages. Their OS decorations set the floors (text copies are kept under `evidence/inf/`):
 
 | INF | Minimum Windows 10 | Build |
 |---|---|---|
-| ElgatoUsbAudio.inf | 1809 | 17763 |
-| ElgatoUsbAudioks.inf | 1809 | 17763 |
-| ElgatoVirtUsbAudioEmu.inf | 1803 | 17134 |
-| ElgatoUsbAudio_dfu.inf | no lower bound (all NT versions) | — |
+| `ElgatoUsbAudio.inf` | 1809 | 17763 |
+| `ElgatoUsbAudioks.inf` | 1809 | 17763 |
+| `ElgatoVirtUsbAudioEmu.inf` | 1803 | 17134 |
+| `ElgatoUsbAudio_dfu.inf` | none | — |
 
-Key findings:
+| Target | Status |
+|---|---|
+| Windows 10 22H2 (19045) | Verified |
+| Windows 10 1809 (17763) through 22H2 | Supported in theory; not tested build by build |
+| Windows 10 1709 (16299) and earlier | Not supported (below 17134) |
+| Windows 11 | Natively supported by Elgato; this project is unnecessary |
+| A 22000+ gate | None of the four INFs carries one |
 
-- **Verified**: Windows 10 22H2 (19045).
-- **Theoretically supported (driver layer)**: Windows 10 **1809 (17763) and every later build** (1809 / 1903 / 1909 / 2004 / 20H1 / 20H2 / 21H1 / 21H2 / 22H2). The main drivers (UsbAudio, UsbAudioks) require 1809+; the VirtUsbAudioEmu sub-driver can go as low as 1803.
-- **No Win11 hard-lock**: none of the 4 INF decorations carry a 22000+ (Windows 11) exclusive gate — they are open to the entire Windows 10 line.
-- **Not supported**: Windows 10 1709 (16299) and earlier (below 17134).
-- **Prerequisite for app auto-install**: Step 0's "unsigned install" relies on the Developer-Mode `-AllowUnsigned` capability, available on **Windows 10 2004 (19041) and newer**. On **1809 / 1909** you must re-sign the repacked MSIX with a trusted certificate (.pfx) — see FAQ_EN.md "Manual re-sign route". **The driver MSI itself is supported on 1809+.**
+To check your build: `Win + R` → `winver` → Enter.
 
-> Note: 1809+ is **theoretical support** derived from the INF OS decorations; only 22H2 has been empirically tested. If you succeed on another Windows 10 build, please open an issue/PR to extend the verified matrix.
+The driver side works on 1809 and up. The app side depends on the OS build:
 
-## Step-by-Step Guide
+- **2004 (19041) and newer** supports `Add-AppxPackage -AllowUnsigned`, which is the route the PowerShell script takes.
+- **1809 / 1909** has no `-AllowUnsigned`. The repacked MSIX must be signed with a trusted certificate and installed normally. The GUI installer does this itself: it creates a self-signed certificate, trusts it into `LocalMachine\Root`, and signs with `signtool`. It does not depend on `-AllowUnsigned` at all.
 
-> This guide follows the **one-click script** as the main path: a single command performs *bypass the Win11 gate + install driver + verify*. For the underlying principle or manual methods, see [FAQ_EN.md](./FAQ_EN.md).
+`-MinBuild` defaults to 19041; that is the OS floor written into the manifest. It is a separate thing from the install route: the floor controls how old a build will accept the package, while `-AllowUnsigned` itself requires 2004 (19041) or newer. Lowering the floor does not give 1809 the ability to install unsigned.
 
-## GUI Installer (WaveLinkWin10Setup.exe)
+## The two repositories
 
-If you prefer not to use the command line, this repo also ships a **native Windows GUI installer** (a single C#/.NET 8 exe) that wraps *place MSIX → patch → install app → install driver → verify* into one window with a live log. It is a feature-equivalent wrapper of the script (`scripts/setup_wavelink_win10.ps1`) — pick either.
+| Repository | Role | Output |
+|---|---|---|
+| [`wavelink-win10-driver`](https://github.com/DRDRDRRDDRDR/wavelink-win10-driver) (this one) | Installer source, official driver, scripts, docs | `wavelink-patch-bundle.zip` (installer + driver, no MSIX) |
+| [`wavelink-win10-autorelease`](https://github.com/DRDRDRRDDRDR/wavelink-win10-autorelease) | Detects upstream releases daily, downloads the MSIX, builds the installer from the `patch/` source copy inside itself, publishes the full bundle | `wavelink-win10-complete.zip` (installer + driver + scripts + MSIX) |
 
-### Get the exe
-- **GitHub Releases**: download `WaveLinkWin10Setup.exe` from the repo's Releases page (self-contained single file, ~**150 MB**, no pre-installed .NET runtime needed): https://github.com/DRDRDRRDDRDR/wavelink-win10-driver/releases
-- Or build it yourself (see "Build from source" below).
+Both workflows use GitHub's built-in `GITHUB_TOKEN`. No personal access token is involved.
 
-### Usage
-1. Place your official MSIX into `input\` next to the exe.
-2. Double-click `WaveLinkWin10Setup.exe`.
-3. In the window:
-   - Click **Browse** to pick the MSIX (leave empty to auto-use the first `*.msix` in `input\`);
-   - Tick **Skip app install / Skip driver install** as needed;
-   - Click **Run all (one-click)** (or Install app only / Install driver only / Verify / Environment check).
-4. Install actions will **auto-request admin elevation (UAC)** — approve it.
-5. The log box scrolls live; when the three Elgato services show `Running`, you are done.
-6. **UI language**: use the **Language** drop-down at the top-right to switch between **中文 / English**. The choice is persisted to `%LOCALAPPDATA%\WaveLinkWin10Setup\lang.cfg` and applies to the next launch and the elevated child process. Default follows the OS display language.
+If you just want Wave Link running, get the complete package from the auto-release repo and ignore the build machinery here.
 
-> The exe embeds the patch script (`patch_manifest.ps1`). At runtime it needs `input\` (your MSIX); if the official driver MSI is missing under `driver\`, the exe tries to call the sibling `scripts/fetch_driver.bat` to auto-download it from the official CDN. For safety, place the repo's `driver/` next to the exe, or build `dist/` (which already contains `driver/` and `input/`) from source. See FAQ_EN.md "5. GUI installer".
+## Get the complete package and install
 
-### Build from source
-Requires the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) installed locally. From the repo root run:
+1. Open the [Releases page of `wavelink-win10-autorelease`](https://github.com/DRDRDRRDDRDR/wavelink-win10-autorelease/releases) and download the newest `wavelink-win10-complete.zip` (tag looks like `wavelink-3.3`).
+2. Extract it anywhere. You get `WaveLinkWin10Setup.exe`, `driver\`, `scripts\`, and `input\` (holding the official MSIX).
+3. **Turn on Developer Mode**: `Settings` → `Update & Security` → `For developers` → Developer mode. The PowerShell script route installs unsigned and needs this; without it, the install fails outright. The GUI installer signs its own package and does not require it, but leaving it on causes no harm.
+4. Right-click `WaveLinkWin10Setup.exe` → **Run as administrator**. Install actions request UAC on their own; running elevated just saves one confirmation.
+5. Click **Env Check (dry-run)** first. It reports the OS build, admin status, and whether the MSIX in `input\` and the MSI in `driver\` are findable.
+6. Click **Run All (One-Click)**. It patches and repacks, signs and installs the app, installs the driver MSI, then verifies.
+7. See [Verification](#verification).
+
+If you already have your own official MSIX, drop it into `input\` (any filename, `.msix` extension), then either pick it with **Browse** or leave the field empty to auto-use the first `*.msix` in `input\`.
+
+## GUI installer
+
+`WaveLinkWin10Setup.exe` is a C# / .NET 8 WinForms application published as a self-contained single-file win-x64 binary, roughly 150 MB. The target machine needs no .NET runtime.
+
+| Control | What it does |
+|---|---|
+| MSIX path field + **Browse** | Points at your official MSIX; empty means "first file in `input\`" |
+| **Skip app install** / **Skip driver install** | Run only half of the flow |
+| Min Win10 build | The `MinVersion` written when patching; default 19041 |
+| **Run All (One-Click)** | Full flow: patch → app → driver → verify |
+| **App Only** / **Driver Only** | Single steps |
+| **Verify** | Verification only; changes nothing |
+| **Env Check (dry-run)** | Read-only; does not need admin |
+| **Check & Update Wave Link** | Queries Elgato for the newest MSIX, compares it against the installed version, downloads it, and starts an elevated install |
+| Log box | Live output of every command and result |
+| Progress indicator | Marquee while a step is running, percentage when it finishes |
+| **Language** drop-down | 中文 / English, persisted to `%LOCALAPPDATA%\WaveLinkWin10Setup\lang.cfg` and inherited by the elevated child process |
+
+When not elevated, install actions relaunch the same exe through `runas` with the original arguments (`--run`, `--msix`, `--minbuild`, `--skipapp`, `--skipdriver`). `patch_manifest.ps1` is compiled into the exe as an embedded resource, so patching works without a `scripts\` folder next to it.
+
+The interface uses a Telegram-inspired light/dark theme: rounded cards, flat accent buttons, hover transitions, and a press ripple.
+
+There is one command-line flag. `--check` runs the read-only environment check, printing to the console and writing `env_check.txt` next to the exe:
+
+```bat
+WaveLinkWin10Setup.exe --check
+```
+
+## Build from source
+
+You need the [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0). From the repository root:
+
 ```bat
 PowerShell -ExecutionPolicy Bypass -File build_exe.ps1
 ```
-Output: `dist/WaveLinkWin10Setup.exe` (the script auto-copies `driver/` and `input/` into `dist/`, ready to ship).
 
-### Prerequisites
+That script runs:
 
-- **Windows 10 2004 (19041) or newer** (22H2 / 19045 verified). On **1809/1909**, the app auto-install needs a trusted-cert re-sign (see FAQ_EN.md "Manual re-sign route"); the driver MSI is supported on 1809+. Check: press `Win + R` → type `winver` → Enter.
-- **Official Wave Link 3.x MSIX** (you provide it, placed in `input/`).
-- Administrator rights (required for app + kernel driver install).
-- This repository downloaded locally.
-
-### Step 1: Get the repository
-
-**Option A — Download ZIP (easiest)**
-1. On the GitHub page click green **Code → Download ZIP**.
-2. Extract to any folder, e.g. `C:\wavelink-win10-driver\`.
-
-**Option B — git clone**
 ```bat
-git clone https://github.com/<your-username>/wavelink-win10-driver.git
-cd wavelink-win10-driver
+dotnet publish src/WaveLinkWin10Setup/WaveLinkWin10Setup.csproj -c Release -r win-x64 ^
+  --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true ^
+  -p:PublishTrimmed=false -p:DebugType=None -o dist
 ```
 
-### Step 2: Place the official MSIX
+The output is `dist\WaveLinkWin10Setup.exe`. The `BundleAssetsAfterPublish` target in the csproj copies `driver\` and `scripts\` into `dist\` after publishing, and the script adds `input\`, so `dist\` is ready to hand out as-is.
 
-Put your official Wave Link 3.x MSIX into the repo's `input\` folder, e.g.:
-`input\Elgato.WaveLink_3.2.10.4073_x64_Win10.msix`.
-(Source: Elgato official downloader export / Store export / your backup. Not hosted by this repo.)
+`.github/workflows/build.yml` runs on a `v*` tag or manual dispatch, builds the exe, and publishes `wavelink-patch-bundle.zip` (installer + `driver\`) to this repo's Releases. A second workflow, `.github/workflows/release.yml`, runs on a `wavelink-*` tag or manual dispatch and publishes the installer alone as `wavelink-win10-installer.zip`.
 
-### Step 3: One-click end-to-end install (recommended)
+## PowerShell one-liner route
 
-Open PowerShell as Administrator (or just type `powershell` in the Explorer address bar),
-`cd` to the repo root, and run:
+`scripts\setup_wavelink_win10.ps1` runs the same flow without a GUI. It self-elevates when needed and writes a transcript to `setup_wavelink_win10.log` in the repository root.
 
 ```bat
 PowerShell -ExecutionPolicy Bypass -File scripts\setup_wavelink_win10.ps1
 ```
 
-The script will: elevate if needed → enable Developer Mode → patch & repack the MSIX →
-install the app unsigned → install the official driver MSI → verify the
-`ElgatoVirtUsbAudioEmu / ElgatoUsbAudio / ElgatoUsbAudioks` services are Running. Log: `setup_wavelink_win10.log`.
-
-Optional parameters:
-
 | Parameter | Meaning |
 |---|---|
-| `-MsixPath <path>` | Explicit MSIX path; omit to auto-use the first `.msix` in `input\` |
-| `-SkipApp` | Skip app install (app already present; only (re)install the driver) |
-| `-SkipDriver` | Skip driver install (only install the app) |
-| `-MinBuild 19041` | Target Win10 floor after patching (default 19041 = 2004) |
+| `-MsixPath <path>` | Explicit MSIX; omitted means the first `.msix` in `input\` |
+| `-SkipApp` | Skip the app; only install or reinstall the driver |
+| `-SkipDriver` | Skip the driver; only install the app |
+| `-MinBuild 19041` | Windows 10 floor written into the patched manifest; default 19041 |
 
-Example — driver only (app already installed):
+Driver only:
+
 ```bat
 PowerShell -ExecutionPolicy Bypass -File scripts\setup_wavelink_win10.ps1 -SkipApp
 ```
 
-> To understand how the script "bypasses the Win11 gate / why unsigned install works", see FAQ_EN.md "How the MSIX Win11 gate is bypassed".
+This script's verification step reads service state for `ElgatoVirtUsbAudioEmu`, `ElgatoUsbAudio`, and `ElgatoUsbAudioks`, and ends with a warning if any is not `Running`. Kernel-mode driver services register with the SCM only on PnP enumeration, so a freshly installed driver showing `Stopped` or not appearing at all is expected. Judge the install by the driver store instead, as described in the next section.
 
-### Step 4: Driver only / reinstall (app already installed)
+For a driver-only reinstall there is also `scripts\reinstall_wavelink_driver.bat`: right-click → Run as administrator. It calls `msiexec /i ... /qn /norestart` and writes `scripts\msi_reinstall.log`. That bat expects `WaveLinkDriver_3.0.0.466_x64.msi` to sit beside it, and it does not look in `driver\`, so run it from inside `driver\` or copy the MSI next to it first.
 
-Open `scripts\`, **right-click** `reinstall_wavelink_driver.bat` → **Run as administrator**.
-Silent install (`/qn`), ~tens of seconds, no reboot.
+If the driver MSI is missing, `scripts\fetch_driver.bat` re-downloads it from the official CDN into `driver\`.
 
-> Manual copy-paste method: see FAQ_EN.md "Manual driver install".
+## Verification
 
-### Step 5: Verify
+Two independent checks, both read directly from the system rather than from log wording.
 
-1. Launch Wave Link 3.x (if you used the one-click script, the app is already installed).
-2. Open **Wave Link Settings → Output Routing** and confirm all of these endpoints are visible and selectable:
-   `Wave Mic 1–4, Game, Music, Chat Mix, Voice Chat, Browser, SFX, System, Aux 1/2, Aux Mix, Personal Mix, Stream Mix, Recording Mix` (17 total).
-3. If all appear, the driver is installed. Detailed evidence: `reports/wavelink_verify_report.md`.
+**Driver**: are the INF packages staged in the Windows driver store?
 
-> In the first ~2 minutes you may see `hr=0x88890004` (pipeline init jitter) — benign, settles shortly.
+```bat
+pnputil /enum-drivers
+```
 
-### Step 6: Re-fetch if missing
+Look for `elgatousbaudio.inf`, `elgatousbaudioks.inf`, and `elgatovirtusbaudioemu.inf`. Driver-store writes happen synchronously during install, unlike SCM service registration which lags, so this is the strongest evidence available.
 
-- **Driver MSI missing**: open `scripts\`, double-click `fetch_driver.bat` to re-download from the official public CDN into `driver\`.
-- **App MSIX help**: open `scripts\`, double-click `fetch_app.bat` for placement guidance; drop the official MSIX into `input\` and re-run the one-click script.
+**App**:
 
-## How the research artifacts were produced
+```powershell
+Get-AppxPackage -Name Elgato.WaveLink | Select-Object Name, Version
+```
 
-| Step | What it does | Artifact / Script |
-|---|---|---|
-| 0. App bypass | Lower MSIX MinVersion + install unsigned under Developer Mode | `scripts/setup_wavelink_win10.ps1` → `scripts/patch_manifest.ps1` |
-| 1. Locate driver | Reverse-engineer `Elgato.BaseClasses.Core.dll` to find the official endpoint; capture the MSI with spoofed Win11 params | `driver/WaveLinkDriver_3.0.0.466_x64.msi` |
-| 2. Compatibility check | Read the 4 INF files inside the MSI's embedded CAB; confirm no Win11-only gate | `evidence/inf/*.inf` |
-| 3. Install driver | `msiexec /i` (critical: use a native Windows host to avoid the MSYS path-translation trap) | exit code 0, no reboot |
-| 4. Verify | Launch Wave Link 3.x; capture logs confirming 17/17 virtual routing endpoints ready | `reports/wavelink_verify_report.md` |
+A version means the package is installed.
 
-Conclusion: the driver binaries are Win10-compatible (`LaunchConditions` pass, no Win11 decoration in any INF); the original "stuck at Install driver" block (server-side non-delivery) is bypassed.
+The installer's **Verify** button runs both of these and prints service state alongside. Services that are `Stopped` or not yet registered are reported, not treated as failure.
 
-## Repository Layout
+The final confirmation happens inside Wave Link. Open `Settings → Output Routing` and check that all 17 endpoints are present and selectable:
+
+`Wave Mic 1–4`, `Game`, `Music`, `Chat Mix`, `Voice Chat`, `Browser`, `SFX`, `System`, `Aux 1/2`, `Aux Mix`, `Personal Mix`, `Stream Mix`, `Recording Mix`, 17 in total
+
+This part needs a human at the machine; no script can do it. The recorded evidence is in `reports/wavelink_verify_report.md`, and the INF compatibility findings are in `reports/wavelink_driver_install_report.md`.
+
+## Known limitations
+
+- Only Windows 10 22H2 (19045) has been tested. 1809 and up is a theoretical range derived from the INF OS decorations, never verified build by build.
+- For about two minutes after launch, `hr=0x88890004` (a Thesycon pipeline init race) can appear in the Wave Link log. The devices are already `started` and it clears on its own.
+- `Found 0 drivers` in the app log is the runtime update query; Windows 10 gets nothing back from the server. It says nothing about the local driver, and the same log records `Found current driver version: 3.0.0.466`.
+- Launching `msiexec` from Git Bash / MSYS rewrites `C:\...` to `/Users/...` and the install fails with exit code **83**. Use `cmd.exe` or PowerShell. The GUI installer is unaffected.
+- Whether audio actually plays and streaming mixes work needs a real listening test in Wave Link.
+- No `.pfx` private key ships here. `certs\WaveLinkPatch.cer` is the public half of the certificate used on the machine that originally repacked, and is useless for signing anyone else's MSIX.
+
+## Repository layout
 
 ```
-wavelink_win10_driver/
-├── README.md                      # Chinese version (step-by-step guide)
-├── README_EN.md                   # This file (English)
-├── FAQ.md                         # Principles / manual steps / FAQ (Chinese)
-├── FAQ_EN.md                      # FAQ in English
-├── NOTICE                         # Compliance & copyright
-├── LICENSE                        # MIT (self-authored only)
+wavelink-win10-driver/
+├── README.md / README_EN.md
+├── FAQ.md / FAQ_EN.md
+├── NOTICE                      compliance and copyright
+├── LICENSE                     MIT (self-authored scripts and docs only)
 ├── .gitignore
-├── build_exe.ps1                  # Build the GUI installer (dotnet publish self-contained)
-├── src/WaveLinkWin10Setup/        # GUI installer source (C#/.NET 8 WinForms; patch_manifest.ps1 embedded as resource)
-└── dist/                          # ★ Build output (git-ignored; distributed via Releases)
+├── build_exe.ps1               build the self-contained installer
+├── .github/workflows/
+│   ├── build.yml               v* tag or manual → wavelink-patch-bundle.zip
+│   └── release.yml             wavelink-* tag or manual → wavelink-win10-installer.zip
+├── src/WaveLinkWin10Setup/
+│   ├── WaveLinkWin10Setup.csproj
+│   ├── App.manifest
+│   ├── Program.cs              entry point; --check goes headless
+│   ├── MainForm.cs             window and controls
+│   ├── Installer.cs            patch / install app / install driver / verify
+│   ├── Updater.cs              query Elgato Zendesk and download the newest MSIX
+│   ├── Lang.cs                 zh/en string table
+│   ├── EnvironmentCheck.cs     read-only check behind --check
+│   └── Resources/patch_manifest.ps1   embedded patch script
 ├── driver/
-│   └── WaveLinkDriver_3.0.0.466_x64.msi   # Official public-CDN driver (~3MB)
+│   ├── WaveLinkDriver_3.0.0.466_x64.msi   official public-CDN driver (2.91 MB)
+│   └── elgato/                            the 4 signed driver packages, used by the pnputil fallback
 ├── scripts/
-│   ├── setup_wavelink_win10.ps1          # ★ End-to-end: patch+install app + install driver + verify
-│   ├── patch_manifest.ps1                # ★ Lower MSIX AppxManifest MinVersion + repack (bypass Win11 gate)
-│   ├── reinstall_wavelink_driver.bat     # Standalone one-click driver reinstall (admin elevation + msiexec /qn)
-│   ├── fetch_driver.bat                  # Re-download MSI from official CDN (binary-free alternative)
-│   ├── fetch_app.bat                     # Instructions for obtaining the MSIX (app not hosted here)
-│   ├── extract_cab.py / find_cab.py / list_streams.py  # Research: extract MSI embedded CAB
-│   ├── patch_manifest.py                 # Research: earlier Python patcher (same principle)
-│   ├── envcheck.ps1                      # Research: environment check (admin / MSI path)
-│   └── install.ps1                       # Research: cert import + Add-AppxPackage entry
+│   ├── setup_wavelink_win10.ps1       one-shot flow (patch + app + driver + verify)
+│   ├── patch_manifest.ps1             MinVersion/Publisher rewrite, signature removal, repack
+│   ├── reinstall_wavelink_driver.bat  standalone driver reinstall
+│   ├── fetch_driver.bat               re-download the MSI from the official CDN
+│   ├── fetch_app.bat                  MSIX placement instructions
+│   ├── install.ps1                    cert import + Add-AppxPackage example
+│   ├── envcheck.ps1                   environment check
+│   ├── patch_manifest.py              earlier Python patcher, same idea
+│   └── extract_cab.py / find_cab.py / list_streams.py   pull the CAB out of the MSI
 ├── reports/
-│   ├── wavelink_driver_install_report.md  # Install & INF compatibility report
-│   └── wavelink_verify_report.md          # Live verification report (17/17 endpoints)
-├── certs/
-│   └── WaveLinkPatch.cer                  # Public half of the repack cert (illustrative only, no private key)
-├── input/                                # ★ Drop your official MSIX here (*.msix ignored by .gitignore)
+│   ├── wavelink_driver_install_report.md
+│   └── wavelink_verify_report.md
+├── certs/WaveLinkPatch.cer
+├── input/                      where your official MSIX goes (*.msix is git-ignored)
 │   ├── README.txt
 │   └── .gitkeep
 └── evidence/
-    ├── inf/                               # 4 Elgato INF files (Win10 compatibility proof, © Elgato)
-    │   ├── ElgatoUsbAudio.inf
-    │   ├── ElgatoUsbAudio_dfu.inf
-    │   ├── ElgatoUsbAudioks.inf
-    │   └── ElgatoVirtUsbAudioEmu.inf
-    ├── duc_win10.json / duc_win11.json    # Device-update-check request/response (Win10 vs Win11)
-    ├── pnp.txt                            # PnP virtual device status
-    ├── a_log.txt                          # App runtime log excerpt
-    ├── msi_install*.log                   # msiexec install logs (success exit code 0)
-    ├── extract_log2.txt / envcheck.txt / install_log.txt / exitcode.txt
+    ├── inf/                    the 4 Elgato INF files (© Elgato)
+    ├── a_log.txt               app runtime log excerpt
+    ├── duc_win10.json / duc_win11.json   device-update-check request and response
+    ├── pnp.txt                 PnP virtual device status
+    ├── envcheck.txt / exitcode.txt / extract_log2.txt
+    ├── install_log.txt
+    └── msi_install*.log        msiexec install logs
 ```
 
-> ★ = core end-to-end automation scripts. The other `.py` / older `.ps1` files are research artifacts kept for reference, not required.
+The `.py` files and the older `envcheck.ps1` / `install.ps1` under `scripts\` are research artifacts. The working flow does not need them.
 
-## Compliance & Exclusions
+## Compliance
 
-This repo deliberately **excludes** the following Elgato proprietary / large items, keeping only research artifacts and the official public driver:
+Three kinds of Elgato proprietary asset, all copyright Elgato:
 
-| Excluded | Size | Reason |
-|---|---|---|
-| Two MSIX app packages | ~191MB ×2 | Elgato proprietary app, copyright / size |
-| `src\` unpacked app DLLs | ~390MB | Elgato proprietary app code |
-| Driver binaries `.sys`/`.dll`/`.cat` | — | Provided by the MSI itself; redistributing standalone is a copyright risk |
-| `win11_update.xml` | 52MB | Server-response cache |
+| Asset | How it appears here |
+|---|---|
+| `driver/WaveLinkDriver_3.0.0.466_x64.msi` | Kept as downloaded from `https://edge.elgato.com/egc/windows/ewlw/drivers/WaveLinkDriver_3.0.0.466_x64.msi` |
+| The four driver packages under `driver/elgato/` | Extracted from the official MSI |
+| The four INF texts under `evidence/inf/` | Same source, for reading |
 
-**Included**: reports, scripts, evidence logs, the official public-CDN driver MSI (3MB), self-signed cert, and the 4 INF texts. The app MSIX is supplied locally by the user (in `input/`, git-ignored) and never enters the repo.
+The Wave Link app MSIX never enters this repository: `input/*.msix` is git-ignored, and the auto-release repo fetches it once from the official CDN at build time and bundles it inside the release archive. Details in [`NOTICE`](./NOTICE).
 
-> For a binary-free repo, delete `driver/*.msi` and use `scripts/fetch_driver.bat`.
+For a binary-free repository, delete `driver/*.msi` and `driver/elgato/` and rely on `scripts\fetch_driver.bat`.
 
-## Known Limitations
-
-- Step 0's "unsigned app install" relies on Windows 10 **2004 (19041) or newer** Developer Mode `-AllowUnsigned`; 1809/1909 need a trusted-cert re-sign (no .pfx shipped here).
-- In the first ~2 minutes `hr=0x88890004` (Thesycon pipeline init jitter) may appear — benign.
-- `Found 0 drivers` in the log is a runtime server-update query (Win10 server delivers none), not a local absence — the same log shows `Found current driver version: 3.0.0.466`.
-- GUI-level final verification (play audio, confirm meters move) requires manual operation on your side.
-- Compatibility is empirically verified only on Windows 10 22H2; 1809+ is theoretical, not per-build tested.
-
-## Automated build & auto-release (GitHub Actions split)
-
-This repo is the **patch repo** — it only builds and publishes the patched installer. The **auto-detection of the latest Elgato MSIX + bundling + releasing** has been moved to a separate repo:
-[`wavelink-win10-autorelease`](https://github.com/DRDRDRRDDRDR/wavelink-win10-autorelease) (runs daily at 06:00 UTC; see that repo's README for the mechanism and links).
-
-### This repo's workflow (`.github/workflows/build.yml`)
-- Triggers: push a tag (`vX.Y.Z`) or manual `workflow_dispatch`.
-- Action: `dotnet publish` builds the self-contained installer exe, bundles it with `driver/` into `wavelink-patch-bundle.zip`, and publishes to this repo's Release.
-- This is the "patch artifact" (installer + driver) — it does **not** contain Elgato's MSIX.
-
-### Where is the complete package (with MSIX)?
-It is generated automatically by `wavelink-win10-autorelease`: it clones this repo to build the installer, fetches the latest MSIX from the official site, assembles the complete package, and releases it (tag like `wavelink-3.2.10`). Regular users should just download the complete package from that repo.
-
-- Credentials: GitHub built-in `GITHUB_TOKEN` (`contents: write`) — no personal PAT required.
-- Compliance: the MSIX is Elgato proprietary; it is only fetched from the official CDN at build time and bundled into the Release archive — never re-hosted standalone or modified.
-
-> For an equivalent local build, see `build_exe.ps1`.
+Self-authored scripts and documentation are MIT. See `LICENSE`.
 
 ## References
 
-- Install report: `reports/wavelink_driver_install_report.md`
-- Verify report: `reports/wavelink_verify_report.md`
-- FAQ & manual steps: [FAQ_EN.md](./FAQ_EN.md)
+- [FAQ_EN.md](./FAQ_EN.md): bypass mechanics, manual re-sign route, manual driver install, common problems
+- `reports/wavelink_driver_install_report.md`: driver install and INF compatibility findings
+- `reports/wavelink_verify_report.md`: live verification, 17/17 endpoints
 - Official driver CDN: `https://edge.elgato.com/egc/windows/ewlw/drivers/WaveLinkDriver_3.0.0.466_x64.msi`
+- Chinese version: [README.md](./README.md)

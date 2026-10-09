@@ -1,270 +1,269 @@
-# Wave Link 3.x 在 Windows 10 上的端到端安装（研究 / 复现包）
+# Wave Link 3.x on Windows 10：安装器与补丁源码
 
-> ⚠️ **免责声明**：本项目与 Elgato / Corsair 无任何关联，仅用于技术研究、兼容性验证与本地复现。
-> 所有 Elgato 专有资产（驱动 MSI、INF、MSIX 安装包）的版权归 Elgato 所有，使用须遵守其许可协议。
-> 不建议用于商业用途或规避正常的产品授权机制。详见 [`NOTICE`](./NOTICE)。
-> 英文说明见 [README_EN.md](./README_EN.md)；原理与手动步骤见 [FAQ.md](./FAQ.md).
+Elgato 的 Wave Link 3 for Windows 声明的最低系统版本是 Windows 11（MSIX 的 `AppxManifest.xml` 里写死 `MinVersion="10.0.22000.0"`），安装器直接拒绝在 Windows 10 上安装。就算装上了，应用运行时还会向服务端查询驱动，而 Elgato 服务端对 Windows 10 上报的 `osVersion` 返回空设备列表，所以它会一直停在 "Install driver"。
 
-> 📦 **仓库分工**：本仓库为**补丁仓库**（源码 / 驱动 / 脚本 / 文档）；**自动检测 Elgato 最新 MSIX 并打包发版**已移至 [`wavelink-win10-autorelease`](https://github.com/DRDRDRRDDRDR/wavelink-win10-autorelease)。普通用户请到那个仓库下载含 MSIX 的完整包。
+这两个环节都需要单独处理：
 
----
+1. 把 MSIX 的 `MinVersion` 降到 Windows 10 的构建号，改掉 `<Identity>` 的 Publisher，删掉失效的 `AppxSignature.p7x`，重打包后安装；
+2. 绕开服务端下发，用官方驱动 MSI 把音频驱动直接装进系统。
 
-## 项目简介
+驱动本身没有 Windows 11 锁，这是整件事成立的前提。
 
-Elgato Wave Link 3.x 官方仅支持 Windows 11。本仓库提供在 **Windows 10** 上从「应用装不上」到「驱动就绪」的**端到端**流程产物与一键脚本：
+本仓库是**补丁仓库**：存放安装器源码、官方驱动 MSI、脚本、报告和文档。自动检测 Elgato 最新版本并打包发版在配套的 [`wavelink-win10-autorelease`](https://github.com/DRDRDRRDDRDR/wavelink-win10-autorelease)。
 
-1. **第 0 步（应用本体）**：把官方 MSIX 的 `MinVersion=22000`（Win11 门槛）改到 Win10，重打包后在开发者模式下免签名安装；
-2. **第 1 步（驱动）**：绕过「服务端不下发驱动」限制，用官方驱动 MSI 把音频驱动强制装好并验证。
+与 Elgato / Corsair 无关联。专有资产的使用限制见 [NOTICE](./NOTICE)。
 
-**不含任何 Elgato 专有应用二进制**（MSIX 由你本地提供，见 `input/`），仅保留研究产物、脚本与官方公开 CDN 驱动（约 3 MB）。
+## 上游版本
 
-## 背景
+截至 2026-10-09 查询 Elgato Zendesk API（`elgato.zendesk.com`）的结果：Windows 版最新为 **Wave Link 3.3**，发布日 2026-09-16，文章 id `50957117157265`。
 
-Elgato Wave Link 3.x 官方仅支持 Windows 11（MSIX 包 `MinVersion=22000`）。
-在 **Windows 10 22H2（19045）** 上运行时，应用卡在 "Install driver" —— 根因是
-Wave Link 运行时向服务端 `device-update-check.php` 请求驱动，服务端对
-`osVersion=10.0.19045.0` 返回空列表（`appDevices:[]`），不下发音频驱动。
+- x64 包：`https://edge.elgato.com/egc/windows/ewlw/3.3/Stable/Elgato.WaveLink_3.3.0.4529_x64.msix`
+- 大小 195,150,702 字节（186.11 MB），SHA256 `50DDDC68ACBB3C95F193B9A3A56F1EDE1C7D575E91423D5BBA597ECAD88B04C9`
+- Wave Link 3 免费，且可用于非 Elgato 麦克风；Wave Link 2 已停止支持（EOL）
+- 3.3.0.4529 取代此前打包的 3.2.10.4073
 
-经逆向与实测确认：**系统级封锁只存在于两层（MSIX 版本门槛 + 服务端不下发驱动），
-驱动二进制本身对 Windows 10 开放。** 本仓库提供绕过封锁、在 Win10 上装好应用与驱动并验证
-的完整流程产物与一键脚本。
+3.3 的改动见 [FAQ.md](./FAQ.md)「Wave Link 3.3 改了什么」。
 
-## 兼容性范围
+## 兼容性
 
-基于驱动 MSI 内嵌 4 个 INF 的 OS 版本装饰分析（文件见 `evidence/inf/`）：
+驱动 MSI 内嵌 4 个 INF，各自的 OS 装饰决定了下限（INF 文本留档在 `evidence/inf/`）：
 
-| INF | 最低 Windows 10 版本 | Build |
+| INF | 最低 Windows 10 | Build |
 |---|---|---|
-| ElgatoUsbAudio.inf | 1809 | 17763 |
-| ElgatoUsbAudioks.inf | 1809 | 17763 |
-| ElgatoVirtUsbAudioEmu.inf | 1803 | 17134 |
-| ElgatoUsbAudio_dfu.inf | 无下限（适用于全部 NT 版本） | — |
+| `ElgatoUsbAudio.inf` | 1809 | 17763 |
+| `ElgatoUsbAudioks.inf` | 1809 | 17763 |
+| `ElgatoVirtUsbAudioEmu.inf` | 1803 | 17134 |
+| `ElgatoUsbAudio_dfu.inf` | 无下限 | — |
 
-关键结论：
+| 项目 | 状态 |
+|---|---|
+| Windows 10 22H2（19045） | 实测通过 |
+| Windows 10 1809（17763）— 22H2 | 理论支持，未逐版本实测 |
+| Windows 10 1709（16299）及更早 | 不支持（低于 17134） |
+| Windows 11 | 官方原生支持，无需本项目 |
+| 22000+ 硬门槛 | 4 个 INF 中均不存在 |
 
-- **已实测通过**：Windows 10 22H2（19045）。
-- **理论支持（驱动层）**：Windows 10 **1809（17763）及以上全系列**（1809 / 1903 / 1909 / 2004 / 20H1 / 20H2 / 21H1 / 21H2 / 22H2）。其中主驱动（UsbAudio、UsbAudioks）要求 1809+；VirtUsbAudioEmu 子驱动可下探至 1803。
-- **无 Win11 硬锁**：4 个 INF 的装饰中**均无 22000+（Win11）专属门槛**，对 Windows 10 全系开放。
-- **不支持**：Windows 10 1709（16299）及更早版本（低于 17134）。
-- **应用自动安装的前提**：第 0 步的"免签名安装"依赖 Windows 10 **2004（19041）及以上**的开发者模式 `-AllowUnsigned` 能力；若你在 **1809 / 1909** 上安装应用，需自行用受信任证书（.pfx）对改包后的 MSIX 重签名（见 [FAQ.md](./FAQ.md)「手动重签名路线」）。**驱动 MSI 本身在 1809+ 均支持**。
+查看自己的构建号：`Win + R` → 输入 `winver` → 回车。
 
-> 说明：1809+ 为基于 INF OS 装饰的**理论支持**，目前仅 22H2 经过实测。若你在其他 Win10 版本安装成功，欢迎在仓库提交反馈以扩展实测矩阵。
+驱动安装层在 1809 及以上都能走通。应用安装分两条路：
 
-## 使用教程（保姆级）
+- **2004（19041）及以上**：可以用 `Add-AppxPackage -AllowUnsigned` 免签名安装（PowerShell 脚本走这条）。
+- **1809 / 1909**：没有 `-AllowUnsigned` 参数，必须先用受信任证书给改包后的 MSIX 签名再正常安装。GUI 安装器自带这一步（生成自签证书、装进 `LocalMachine\Root`、再用 `signtool` 签名），所以不依赖 `-AllowUnsigned`。
 
-> 本教程以「一键脚本」为主线，一条命令同时完成 *绕过 Win11 门槛装应用 + 装驱动 + 验证*。
-> 想了解背后的原理或需要手动方式，见 [FAQ.md](./FAQ.md)。
+`-MinBuild` 默认 19041，这是写进 Manifest 的系统下限。它和安装方式是两回事：下限决定这个包最低能装到哪个构建号，而 `-AllowUnsigned` 本身要求 2004（19041）及以上，所以把下限设得再低也不会让 1809 具备免签名安装能力。
 
-## 图形界面安装器（WaveLinkWin10Setup.exe）
+## 两个仓库怎么分工
 
-若你不想敲命令行，本仓库同时提供**原生 Windows GUI 安装器**（C#/.NET 8 编译的单个 exe），把"放 MSIX → 改包 → 装应用 → 装驱动 → 验证"全部收进一个窗口，实时显示日志。它是脚本版（`scripts/setup_wavelink_win10.ps1`）的同功能封装，二者任选其一。
+| 仓库 | 职责 | 产物 |
+|---|---|---|
+| [`wavelink-win10-driver`](https://github.com/DRDRDRRDDRDR/wavelink-win10-driver)（本仓库） | 安装器源码、官方驱动、脚本、文档 | `wavelink-patch-bundle.zip`（安装器 + 驱动，不含 MSIX） |
+| [`wavelink-win10-autorelease`](https://github.com/DRDRDRRDDRDR/wavelink-win10-autorelease) | 每日检测上游新版本、下载 MSIX、从仓库内 `patch/` 的源码副本构建安装器、拼完整包发版 | `wavelink-win10-complete.zip`（安装器 + 驱动 + 脚本 + MSIX） |
 
-### 获取 exe
-- **GitHub Releases**：下载 `WaveLinkWin10Setup.exe`（self-contained 单文件，约 **150 MB**，无需预装 .NET 运行时）：https://github.com/DRDRDRRDDRDR/wavelink-win10-driver/releases
-- 或自行构建（见下方「从源码构建」）。
+两个仓库的工作流都用 GitHub 内置的 `GITHUB_TOKEN`，不需要个人 PAT。
 
-### 使用
-1. 把官方 MSIX 放进与 exe 同目录下的 `input\`。
-2. 双击 `WaveLinkWin10Setup.exe`。
-3. 窗口内操作：
-   - 「浏览」选 MSIX（留空则自动用 `input\` 下第一个）；
-   - 按需勾选「跳过应用安装 / 跳过驱动安装」；
-   - 点 **一键运行全部**（或仅装应用 / 仅装驱动 / 验证 / 环境检查）。
-4. 安装类操作会**自动请求管理员提权（UAC）**，确认即可。
-5. 日志框实时滚动；结束三个 Elgato 服务显示 `Running` 即成功。
-6. **界面语言**：窗口右上角「语言」下拉可在 **中文 / English** 间切换；选择会被记住（写入 `%LOCALAPPDATA%\WaveLinkWin10Setup\lang.cfg`），下次启动与提权子进程沿用。默认跟随系统显示语言。
+只想装 Wave Link 的用户去自动发版仓库下载完整包，不需要看这个仓库的构建流程。
 
-> exe 已内嵌改包脚本（`patch_manifest.ps1`）。运行时需 `input\`（你的 MSIX）；若 `driver\` 下缺官方驱动 MSI，exe 会尝试调用同目录 `scripts/fetch_driver.bat` 从官方 CDN 自动下载——为稳妥起见，建议直接将仓库 `driver/` 目录放到 exe 旁，或从源码构建得到含 `driver/`、`input/` 的完整 `dist/`。详见 [FAQ.md](./FAQ.md)「五、图形界面安装器」。
+## 获取并安装完整包
 
-### 从源码构建
-需要本机安装 [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)。在仓库根目录执行：
+1. 打开 [`wavelink-win10-autorelease` 的 Releases](https://github.com/DRDRDRRDDRDR/wavelink-win10-autorelease/releases)，下载最新的 `wavelink-win10-complete.zip`（标签形如 `wavelink-3.3`）。
+2. 解压到任意目录。会得到 `WaveLinkWin10Setup.exe`、`driver\`、`scripts\`、`input\`（`input\` 内是官方 MSIX）。
+3. **开启开发者模式**：`设置` → `更新和安全` → `开发者选项` → 选中 `开发人员模式`。PowerShell 脚本路线靠这一步做免签名安装，不开会直接失败。GUI 安装器自带证书签名，但开着不影响。
+4. 右键 `WaveLinkWin10Setup.exe` → **以管理员身份运行**。安装类操作会自己弹 UAC 提权，手动提权只是省一次确认。
+5. 先点 **环境检查 (干跑)**，确认构建号、管理员状态、`input\` 里的 MSIX 和 `driver\` 里的 MSI 都能找到。
+6. 点 **一键运行全部**。它会依次改包重打包、签名并安装应用、安装驱动 MSI，最后跑一遍验证。
+7. 验证结果见 [如何验证](#如何验证)。
+
+如果你手上已有自己的官方 MSIX，把它放进 `input\`（文件名任意，扩展名 `.msix`），在安装器里用 **浏览** 选中它，或直接留空（会自动取 `input\` 里第一个 `.msix`）。
+
+## GUI 安装器
+
+`WaveLinkWin10Setup.exe` 是 C# / .NET 8 WinForms 程序，发布为自包含单文件 win-x64，约 150 MB，目标机不需要预装 .NET 运行时。
+
+界面提供这些操作：
+
+| 控件 | 作用 |
+|---|---|
+| MSIX 路径 + **浏览** | 指定官方 MSIX；留空则用 `input\` 下的第一个 |
+| **跳过应用安装 / 跳过驱动安装** | 只做其中一半 |
+| 最低 Win10 版本 (build) | 改包写入的 `MinVersion`，默认 19041 |
+| **一键运行全部** | 完整流程：改包 → 装应用 → 装驱动 → 验证 |
+| **仅装应用** / **仅装驱动** | 单步执行 |
+| **验证** | 只跑验证，不改动系统 |
+| **环境检查 (干跑)** | 只读检查，不需要管理员权限 |
+| **检查并更新 Wave Link** | 查询 Elgato 最新 MSIX，比对已装版本，下载后自动发起提权安装 |
+| 日志框 | 实时滚动输出每一步的命令与结果 |
+| 进度条 | 步骤进行中显示跑马灯，完成后显示百分比 |
+| **语言** 下拉 | 中文 / English，写入 `%LOCALAPPDATA%\WaveLinkWin10Setup\lang.cfg`，提权子进程沿用 |
+
+安装类操作在非管理员状态下会用 `runas` 重新拉起自身并带上原参数（`--run`、`--msix`、`--minbuild`、`--skipapp`、`--skipdriver`）。`patch_manifest.ps1` 以嵌入资源形式编进 exe，所以没有 `scripts\` 目录也能改包。
+
+界面是 Telegram 风格的浅色 / 深色主题，圆角卡片、扁平强调色按钮、悬停过渡和按下水波纹。
+
+命令行参数（`--check` 走只读模式，把结果同时打印并写入 exe 同目录的 `env_check.txt`）：
+
+```bat
+WaveLinkWin10Setup.exe --check
+```
+
+## 从源码构建
+
+需要 [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)。在仓库根目录：
+
 ```bat
 PowerShell -ExecutionPolicy Bypass -File build_exe.ps1
 ```
-产物：`dist/WaveLinkWin10Setup.exe`（脚本会自动把 `driver/` 与 `input/` 复制到 `dist/`，可直接分发）。
 
-### 前置条件
+`build_exe.ps1` 实际执行的是：
 
-- **Windows 10 2004（19041）或更高**（已实测 22H2 / 19045）。若你在 **1809/1909**，应用自动安装需用受信任证书重签名（见 FAQ「手动重签名路线」）；驱动 MSI 本身在 1809+ 均支持。查看方法：按 `Win + R` → 输入 `winver` → 回车。
-- **官方 Wave Link 3.x 的 MSIX 安装包**（你自己提供，放入 `input/`）。
-- 管理员权限（安装应用与内核驱动必须）。
-- 本仓库已下载到本地。
-
-### 步骤 1：获取本仓库
-
-**方式 A — 下载 ZIP（最简单）**
-1. 在 GitHub 页面点击绿色的 **Code → Download ZIP**。
-2. 解压到任意目录，例如 `C:\wavelink-win10-driver\`。
-
-**方式 B — 用 git 克隆**
 ```bat
-git clone https://github.com/<你的用户名>/wavelink-win10-driver.git
-cd wavelink-win10-driver
+dotnet publish src/WaveLinkWin10Setup/WaveLinkWin10Setup.csproj -c Release -r win-x64 ^
+  --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true ^
+  -p:PublishTrimmed=false -p:DebugType=None -o dist
 ```
 
-### 步骤 2：放好官方 MSIX
+产物是 `dist\WaveLinkWin10Setup.exe`。`csproj` 里的 `BundleAssetsAfterPublish` 目标会在 publish 后把 `driver\` 和 `scripts\` 复制进 `dist\`，`build_exe.ps1` 再补一份 `input\`，因此 `dist\` 可以直接分发。
 
-把官方 Wave Link 3.x 的 MSIX 放到仓库的 `input\` 目录，例如：
-`input\Elgato.WaveLink_3.2.10.4073_x64_Win10.msix`。
-（获取途径：Elgato 官方下载器导出 / 应用商店导出 / 你的备份。本仓库不托管此文件。）
+本仓库的工作流 `.github/workflows/build.yml` 在推 `v*` 标签或手动 `workflow_dispatch` 时构建，打成 `wavelink-patch-bundle.zip`（安装器 + `driver\`）发布到本仓库 Release。另有 `.github/workflows/release.yml`，在推 `wavelink-*` 标签或手动触发时只发布安装器，资产名是 `wavelink-win10-installer.zip`。
 
-### 步骤 3：一键端到端安装（推荐）
+## 命令行一键脚本
 
-以管理员打开 PowerShell（或直接在资源管理器地址栏输入 `powershell`），
-进入仓库根目录，执行：
+`scripts\setup_wavelink_win10.ps1` 是不带 GUI 的等价流程。它在非管理员时会自行提权，并把完整输出写进仓库根目录的 `setup_wavelink_win10.log`。
 
 ```bat
 PowerShell -ExecutionPolicy Bypass -File scripts\setup_wavelink_win10.ps1
 ```
 
-脚本会自动：提权（若尚未管理员）→ 开开发者模式 → 改包并重打包 MSIX →
-免签名安装应用 → 安装官方驱动 MSI → 校验 `ElgatoVirtUsbAudioEmu / ElgatoUsbAudio / ElgatoUsbAudioks`
-三个服务是否为 Running。日志见 `setup_wavelink_win10.log`。
-
-可选参数：
-
 | 参数 | 说明 |
 |---|---|
-| `-MsixPath <路径>` | 直接指定官方 MSIX；省略则自动用 `input\` 下第一个 `.msix` |
-| `-SkipApp` | 跳过应用安装（应用已装好，只装/重装驱动） |
-| `-SkipDriver` | 跳过驱动安装（只装应用） |
-| `-MinBuild 19041` | 改包后的目标 Win10 下限（默认 19041 = 2004） |
+| `-MsixPath <路径>` | 指定官方 MSIX；省略则取 `input\` 下第一个 `.msix` |
+| `-SkipApp` | 跳过应用安装，只装或重装驱动 |
+| `-SkipDriver` | 跳过驱动安装，只装应用 |
+| `-MinBuild 19041` | 改包写入的 Win10 下限，默认 19041 |
 
-例：只重装驱动（应用已装好）
+只重装驱动：
+
 ```bat
 PowerShell -ExecutionPolicy Bypass -File scripts\setup_wavelink_win10.ps1 -SkipApp
 ```
 
-> 想了解脚本如何「绕过 Win11 门槛 / 为什么免签名能装」，见 [FAQ.md](./FAQ.md)「绕过 MSIX Win11 门槛的原理」。
+脚本的验证环节读的是服务状态（`ElgatoVirtUsbAudioEmu`、`ElgatoUsbAudio`、`ElgatoUsbAudioks`），服务不是 `Running` 时会以警告结束。内核态驱动服务只在 PnP 枚举时向 SCM 注册，所以刚装完显示 `Stopped` 或查不到是正常的。判断安装成功要看驱动库，见下一节。
 
-### 步骤 4：只装 / 重装驱动（应用已装好）
+只装驱动也可以用 `scripts\reinstall_wavelink_driver.bat`：右键以管理员身份运行，内部执行 `msiexec /i ... /qn /norestart`，日志写到 `scripts\msi_reinstall.log`。注意这个 bat 假设 `WaveLinkDriver_3.0.0.466_x64.msi` 就在它旁边，它不会去 `driver\` 找，所以要么在 `driver\` 目录里运行，要么先把 MSI 复制同目录。
 
-进入 `scripts\`，**右键** `reinstall_wavelink_driver.bat` → **以管理员身份运行**。
-静默安装（`/qn`），约几十秒，无需重启。
+驱动 MSI 丢失时，`scripts\fetch_driver.bat` 会从官方 CDN 重新下载到 `driver\`。
 
-> 手动复制粘贴方式见 [FAQ.md](./FAQ.md)「手动安装驱动」。
+## 如何验证
 
-### 步骤 5：验证
+安装成功与否有两个独立的判据，都直接从系统读，不看日志措辞。
 
-1. 启动 Wave Link 3.x（若用一键脚本，应用已一并装好）。
-2. 打开 **Wave Link 设置 → 音频路由（Output Routing）**，确认以下端点全部可见且可选：
-   `Wave Mic 1–4、Game、Music、Chat Mix、Voice Chat、Browser、SFX、System、Aux 1/2、Aux Mix、Personal Mix、Stream Mix、Recording Mix`（共 17 个）。
-3. 若全部出现，驱动即安装成功。详细核验证据见 `reports/wavelink_verify_report.md`。
+**驱动**：INF 包是否已暂存进 Windows 驱动库。
 
-> 启动初期约 2 分钟内可能出现 `hr=0x88890004`（pipeline 初始化抖动），属正常现象，稍候即稳。
+```bat
+pnputil /enum-drivers
+```
 
-### 步骤 6：缺驱动包 / 缺应用包时重新获取
+输出中应能同时找到 `elgatousbaudio.inf`、`elgatousbaudioks.inf`、`elgatovirtusbaudioemu.inf`。驱动库的写入是同步的，不像 SCM 服务注册会滞后，所以这是最可靠的证据。
 
-- **驱动 MSI 丢失**：进入 `scripts\`，双击 `fetch_driver.bat`，从官方公共 CDN 重新下载到 `driver\`。
-- **应用 MSIX 获取说明**：进入 `scripts\`，双击 `fetch_app.bat` 查看放置指引；把官方 MSIX 放进 `input\` 后重跑一键脚本。
+**应用**：
 
-## 流程总览（研究产物如何产生）
+```powershell
+Get-AppxPackage -Name Elgato.WaveLink | Select-Object Name, Version
+```
 
-| 步骤 | 内容 | 产物 / 脚本 |
-|---|---|---|
-| 0. 应用绕过 | 改 MSIX 的 MinVersion + 开发者模式免签名安装 | `scripts/setup_wavelink_win10.ps1` → `scripts/patch_manifest.ps1` |
-| 1. 定位驱动源 | 逆向 `Elgato.BaseClasses.Core.dll` 找到官方端点，伪装 Win11 参数抓包 | `driver/WaveLinkDriver_3.0.0.466_x64.msi` |
-| 2. 兼容性判定 | 读取 MSI 内嵌 CAB 的 4 个 INF，确认无 Win11 硬锁 | `evidence/inf/*.inf` |
-| 3. 安装驱动 | `msiexec /i` 安装（关键：用 Windows 原生宿主，避免 MSYS 路径转换坑） | 退出码 0，无需重启 |
-| 4. 核验 | 启动 Wave Link 3.x，抓日志确认 17/17 虚拟路由端点就绪 | `reports/wavelink_verify_report.md` |
+有版本号返回即已安装。
 
-核心结论：驱动二进制对 Win10 开放（`LaunchConditions` 通过，4 个 INF 均无 Win11 装饰），
-原"卡在 Install driver"的根因（服务端不下发）已被绕过。
+GUI 安装器的 **验证** 按钮跑的就是这两项，并把服务状态一并打印出来；服务是 `Stopped` 或尚未注册只报告，不计为失败。
+
+驱动加载后的最终确认在 Wave Link 里做：打开 `设置 → 音频路由 (Output Routing)`，确认这 17 个端点都在且可选：
+
+`Wave Mic 1–4`、`Game`、`Music`、`Chat Mix`、`Voice Chat`、`Browser`、`SFX`、`System`、`Aux 1/2`、`Aux Mix`、`Personal Mix`、`Stream Mix`、`Recording Mix`，共 17 个
+
+这一步需要你手动操作，脚本无法代劳。实测核验记录见 `reports/wavelink_verify_report.md`，驱动兼容性判定见 `reports/wavelink_driver_install_report.md`。
+
+## 已知限制
+
+- 只有 Windows 10 22H2（19045）经过实测。1809 及以上是依据 INF 的 OS 装饰推导的理论范围，没有逐版本验证过。
+- 启动后的前 2 分钟左右，Wave Link 日志里可能出现 `hr=0x88890004`（Thesycon pipeline 初始化竞态），设备本身已 `started`，通常自行恢复。
+- 应用日志里的 `Found 0 drivers` 是运行时向服务端查更新的结果，Windows 10 拿不到下发，和本地驱动是否装好无关。同一份日志里会写 `Found current driver version: 3.0.0.466`。
+- 用 Git Bash / MSYS 启动 `msiexec` 会把 `C:\...` 路径转成 `/Users/...`，安装以退出码 **83** 失败。请用 `cmd.exe` 或 PowerShell。GUI 安装器不受影响。
+- 音频是否真的能出声、推流混音是否正常，需要你在 Wave Link 里实际播放一路音频确认。
+- 仓库不含任何 `.pfx` 私钥。`certs\WaveLinkPatch.cer` 是改包时那台机器上的自签证书公钥，对别人的 MSIX 没有用处。
 
 ## 目录结构
 
 ```
-wavelink_win10_driver/
-├── README.md                      # 本文件（中文，保姆级教程）
-├── README_EN.md                   # 英文版
-├── FAQ.md                         # 原理 / 手动步骤 / 常见问题（中文）
-├── FAQ_EN.md                      # FAQ 英文版
-├── NOTICE                         # 合规 / 版权说明
-├── LICENSE                        # MIT（仅覆盖自创脚本与文档）
+wavelink-win10-driver/
+├── README.md / README_EN.md
+├── FAQ.md / FAQ_EN.md
+├── NOTICE                      合规与版权
+├── LICENSE                     MIT（仅覆盖自创脚本与文档）
 ├── .gitignore
-├── build_exe.ps1                  # 构建 GUI 安装器（dotnet publish self-contained）
-├── src/WaveLinkWin10Setup/        # GUI 安装器源码（C#/.NET 8 WinForms，patch_manifest.ps1 内嵌为资源）
-└── dist/                          # ★ 构建产物（已被 .gitignore 忽略，通过 Releases 分发）
+├── build_exe.ps1               构建自包含安装器
+├── .github/workflows/
+│   ├── build.yml               推 v* 标签 / 手动 → wavelink-patch-bundle.zip
+│   └── release.yml             推 wavelink-* 标签 / 手动 → wavelink-win10-installer.zip
+├── src/WaveLinkWin10Setup/
+│   ├── WaveLinkWin10Setup.csproj
+│   ├── App.manifest
+│   ├── Program.cs              入口，--check 走无界面模式
+│   ├── MainForm.cs             窗口与控件
+│   ├── Installer.cs            改包 / 装应用 / 装驱动 / 验证
+│   ├── Updater.cs              从 Elgato Zendesk 查最新版并下载 MSIX
+│   ├── Lang.cs                 中英文字符串表
+│   ├── EnvironmentCheck.cs     --check 的只读检查
+│   └── Resources/patch_manifest.ps1   内嵌的改包脚本
 ├── driver/
-│   └── WaveLinkDriver_3.0.0.466_x64.msi   # 官方公共 CDN 驱动（约 3MB）
+│   ├── WaveLinkDriver_3.0.0.466_x64.msi   官方公共 CDN 驱动（2.91 MB）
+│   └── elgato/                            4 个已签名驱动包目录，pnputil 兜底用
 ├── scripts/
-│   ├── setup_wavelink_win10.ps1          # ★ 一键端到端：改包装应用 + 装驱动 + 验证
-│   ├── patch_manifest.ps1                # ★ 改 MSIX AppxManifest MinVersion 并重打包（绕过 Win11 门槛）
-│   ├── reinstall_wavelink_driver.bat     # 单独一键重装驱动（管理员提权 + msiexec /qn）
-│   ├── fetch_driver.bat                  # 从官方 CDN 重新下载 MSI（替代二进制）
-│   ├── fetch_app.bat                     # MSIX 获取说明（应用本体本仓库不托管）
-│   ├── extract_cab.py / find_cab.py / list_streams.py  # 研究用：抽取 MSI 内嵌 CAB
-│   ├── patch_manifest.py                 # 研究用：早期 Python 版改包脚本（同原理）
-│   ├── envcheck.ps1                      # 研究用：环境检查（管理员 / MSI 路径）
-│   └── install.ps1                       # 研究用：证书导入 + Add-AppxPackage 安装入口
+│   ├── setup_wavelink_win10.ps1       一键流程（改包 + 装应用 + 装驱动 + 验证）
+│   ├── patch_manifest.ps1             改 MinVersion 与 Publisher、删签名、重打包
+│   ├── reinstall_wavelink_driver.bat  单独重装驱动
+│   ├── fetch_driver.bat               从官方 CDN 重新下载 MSI
+│   ├── fetch_app.bat                  MSIX 放置说明
+│   ├── install.ps1                    导入证书 + Add-AppxPackage 的入口示例
+│   ├── envcheck.ps1                   环境检查
+│   ├── patch_manifest.py              早期 Python 版改包脚本（同原理）
+│   └── extract_cab.py / find_cab.py / list_streams.py   抽取 MSI 内嵌 CAB
 ├── reports/
-│   ├── wavelink_driver_install_report.md  # 安装与 INF 兼容性报告
-│   └── wavelink_verify_report.md          # 启动实测核验报告（17/17 端点）
-├── certs/
-│   └── WaveLinkPatch.cer                  # 改包用的自签证书公钥示例（仅示意，无私钥）
-├── input/                                # ★ 你放官方 MSIX 的地方（*.msix 已被 .gitignore 忽略）
+│   ├── wavelink_driver_install_report.md
+│   └── wavelink_verify_report.md
+├── certs/WaveLinkPatch.cer
+├── input/                      放官方 MSIX 的位置（*.msix 被 .gitignore 忽略）
 │   ├── README.txt
 │   └── .gitkeep
 └── evidence/
-    ├── inf/                               # 4 个 Elgato INF（Win10 兼容证明，版权归 Elgato）
-    │   ├── ElgatoUsbAudio.inf
-    │   ├── ElgatoUsbAudio_dfu.inf
-    │   ├── ElgatoUsbAudioks.inf
-    │   └── ElgatoVirtUsbAudioEmu.inf
-    ├── duc_win10.json / duc_win11.json    # 设备更新检查请求/响应（Win10 vs Win11）
-    ├── pnp.txt                            # PnP 虚拟设备状态
-    ├── a_log.txt                          # 应用运行日志摘录
-    ├── msi_install*.log                   # msiexec 安装日志（含成功退出码 0）
-    ├── extract_log2.txt / envcheck.txt / install_log.txt / exitcode.txt
+    ├── inf/                    4 个 Elgato INF（版权归 Elgato）
+    ├── a_log.txt               应用运行日志摘录
+    ├── duc_win10.json / duc_win11.json   设备更新检查请求与响应
+    ├── pnp.txt                 PnP 虚拟设备状态
+    ├── envcheck.txt / exitcode.txt / extract_log2.txt
+    ├── install_log.txt
+    └── msi_install*.log        msiexec 安装日志
 ```
 
-> ★ = 端到端自动化核心脚本。其余 `.py` / 旧 `.ps1` 为研究过程留档，可单独阅读但非必需。
+`scripts\` 下的 `.py` 和 `envcheck.ps1`、`install.ps1` 是研究过程留档，跑通流程不需要它们。
 
-## 合规与排除项
+## 合规
 
-本仓库**刻意排除**以下 Elgato 专有 / 大体积内容，仅保留研究产物与官方公开驱动：
+Elgato 专有资产有三类，版权归 Elgato：
 
-| 排除项 | 体量 | 原因 |
-|---|---|---|
-| 两个 MSIX 应用包 | ~191MB ×2 | Elgato 专有应用，版权 / 体积 |
-| `src\` 解包应用 DLL | ~390MB | Elgato 专有应用代码 |
-| 驱动二进制 `.sys`/`.dll`/`.cat` | — | 由 MSI 自身提供，单独散布有版权风险 |
-| `win11_update.xml` | 52MB | 服务端响应缓存 |
+| 资产 | 在本仓库的形态 |
+|---|---|
+| `driver/WaveLinkDriver_3.0.0.466_x64.msi` | 官方公共 CDN 直链下载后原样存放，来自 `https://edge.elgato.com/egc/windows/ewlw/drivers/WaveLinkDriver_3.0.0.466_x64.msi` |
+| `driver/elgato/` 下的 4 个 INF 与驱动包 | 从官方 MSI 提取 |
+| `evidence/inf/*.inf` 的 4 份 INF 文本 | 同上，仅供阅读 |
 
-**纳入**：报告、脚本、证据日志、官方公开 CDN 驱动 MSI（3MB）、自签证书、**4 个 INF 文本**。
-应用 MSIX 由使用者本地提供（放 `input/`，已被 `.gitignore` 忽略），不进入仓库。
+Wave Link 应用 MSIX 从不进入本仓库：`input/*.msix` 已被 `.gitignore` 忽略，自动发版仓库只在构建时从官方 CDN 拉取一次并打包进 Release 压缩包。详见 [`NOTICE`](./NOTICE)。
 
-> 若你希望仓库完全不含任何二进制，可删除 `driver/*.msi` 并改用 `scripts/fetch_driver.bat` 下载。
+想做成完全不含二进制的仓库，删掉 `driver/*.msi` 和 `driver/elgato/`，改用 `scripts\fetch_driver.bat` 下载。
 
-## 已知限制
-
-- 第 0 步的"免签名应用安装"依赖 Windows 10 **2004（19041）及以上**的开发者模式 `-AllowUnsigned`；1809/1909 需用受信任证书重签名（本仓库不含 .pfx）。
-- 启动初期约 2 分钟内可能出现 `hr=0x88890004`（Thesycon pipeline 初始化抖动），非致命。
-- 日志中 `Found 0 drivers` 是运行时向服务端查更新（Win10 服务端不下发），非本地缺失——同一日志明确 `Found current driver version: 3.0.0.466`。
-- 如需 GUI 交互级最终验证（播放音频确认电平走动），需你侧手动操作。
-- 兼容性仅 Windows 10 22H2 经过实测；1809+ 为基于 INF 的理论支持，未经逐版本实测。
-
-## 自动构建与自动发版（GitHub Actions 已拆分）
-
-本仓库是**补丁仓库**，只负责构建并发布「打过补丁的安装器」；**自动检测 Elgato 最新 MSIX + 拼完整包 + 发版**已拆分到独立仓库
-[`wavelink-win10-autorelease`](https://github.com/DRDRDRRDDRDR/wavelink-win10-autorelease)（每日 06:00 UTC 自动运行，原理与链接见该仓库 README）。
-
-### 本仓库工作流（`.github/workflows/build.yml`）
-- 触发：打 tag（`vX.Y.Z`）或手动 `workflow_dispatch`。
-- 动作：`dotnet publish` 构建自包含安装器 exe，连同 `driver/` 打成 `wavelink-patch-bundle.zip` 发布到本仓库 Release。
-- 这是「补丁产物」（安装器 + 驱动），**不含** Elgato 的 MSIX。
-
-### 完整安装包（含 MSIX）在哪里？
-由 `wavelink-win10-autorelease` 自动生成：它克隆本仓库构建安装器、抓取官网最新 MSIX、拼成完整包后发版（tag 形如 `wavelink-3.2.10`）。普通用户直接去那个仓库下载完整包即可。
-
-- 凭据：均用 GitHub 内置 `GITHUB_TOKEN`（`contents: write`），无需个人 PAT。
-- 合规：MSIX 为 Elgato 专有，仅在构建时从官方 CDN 拉取并打进 Release 压缩包，不单独再托管、不修改。
-
-> 本地手动构建等价命令见 `build_exe.ps1`。
+自创的脚本与文档以 MIT 许可发布，见 `LICENSE`。
 
 ## 参考资料
 
-- 安装报告：`reports/wavelink_driver_install_report.md`
-- 核验报告：`reports/wavelink_verify_report.md`
-- 常见问题与手动步骤：[FAQ.md](./FAQ.md)
+- [FAQ.md](./FAQ.md)：绕过原理、手动重签名路线、手动装驱动、常见问题
+- `reports/wavelink_driver_install_report.md`：驱动安装与 INF 兼容性判定
+- `reports/wavelink_verify_report.md`：启动实测核验（17/17 端点）
 - 官方驱动 CDN：`https://edge.elgato.com/egc/windows/ewlw/drivers/WaveLinkDriver_3.0.0.466_x64.msi`
+- 英文版：[README_EN.md](./README_EN.md)

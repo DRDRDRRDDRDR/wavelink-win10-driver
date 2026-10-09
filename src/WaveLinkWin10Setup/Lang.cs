@@ -61,6 +61,14 @@ namespace WaveLinkWin10Setup
         {
             // ---------------- 中文 ----------------
             Zh["title"] = "Wave Link 3.x · Windows 10 安装器";
+            Zh["subtitle"] = "绕过 Win11 门槛安装应用，并强制安装官方音频驱动";
+            Zh["sectionSource"] = "安 装 源";
+            Zh["sectionActions"] = "操 作";
+            Zh["btnSaveLog"] = "保存日志";
+            Zh["logSaved"] = "日志已保存到";
+            Zh["runFinished"] = "操作已完成，请查看日志";
+            Zh["themeDark"] = "深色";
+            Zh["themeLight"] = "浅色";
             Zh["langLabel"] = "语言";
             Zh["lblMsix"] = "官方 Wave Link MSIX 路径（留空则自动用 input/ 下第一个）";
             Zh["btnBrowse"] = "浏览...";
@@ -163,6 +171,14 @@ namespace WaveLinkWin10Setup
 
             // ---------------- English ----------------
             En["title"] = "Wave Link 3.x · Windows 10 Installer";
+            En["subtitle"] = "Install the app past the Windows 11 gate and force-install the official audio driver";
+            En["sectionSource"] = "S O U R C E";
+            En["sectionActions"] = "A C T I O N S";
+            En["btnSaveLog"] = "Save log";
+            En["logSaved"] = "Log saved to";
+            En["runFinished"] = "Finished — see the log for details";
+            En["themeDark"] = "Dark";
+            En["themeLight"] = "Light";
             En["langLabel"] = "Language";
             En["lblMsix"] = "Official Wave Link MSIX path (leave empty to auto-use first file in input/)";
             En["btnBrowse"] = "Browse...";

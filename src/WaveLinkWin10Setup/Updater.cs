@@ -57,19 +57,21 @@ namespace WaveLinkWin10Setup
             using (var doc = JsonDocument.Parse(listJson))
             {
                 // Pick the Windows release-notes article with the highest version number.
-                // (Titles look like "Elgato Wave Link 3.2.10 (Windows) Release Notes".)
+                // (Titles look like "Elgato Wave Link 3.2.10 (Windows) Release Notes", but Elgato
+                // also ships two-part versions such as "Elgato Wave Link 3.3 (Windows) Release
+                // Notes", so the group must accept one or more components - a three-part-only
+                // pattern silently skips those releases.)
                 if (doc.RootElement.TryGetProperty("articles", out var arts))
                 {
-                    var verRe = new Regex(@"Elgato Wave Link (\d+\.\d+\.\d+) \(Windows\) Release Notes");
-                    int[] best = { -1, -1, -1 };
+                    var verRe = new Regex(@"Elgato Wave Link (\d+(?:\.\d+)*) \(Windows\) Release Notes");
+                    int[] best = { -1, -1, -1, -1 };
                     foreach (var a in arts.EnumerateArray())
                     {
                         if (!a.TryGetProperty("title", out var t)) continue;
                         var m = verRe.Match(t.GetString() ?? "");
                         if (!m.Success) continue;
                         var v = ParseVer(m.Groups[1].Value);
-                        if (v[0] > best[0] || (v[0] == best[0] && v[1] > best[1]) ||
-                            (v[0] == best[0] && v[1] == best[1] && v[2] > best[2]))
+                        if (Compare(v, best) > 0)
                         {
                             best = v;
                             if (a.TryGetProperty("id", out var id)) articleId = id.GetRawText();
@@ -122,12 +124,12 @@ namespace WaveLinkWin10Setup
             catch { return ""; }
         }
 
-        static int CompareVer(string a, string b)
+        static int CompareVer(string a, string b) => Compare(ParseVer(a), ParseVer(b));
+
+        static int Compare(int[] a, int[] b)
         {
-            var va = ParseVer(a);
-            var vb = ParseVer(b);
             for (int i = 0; i < 4; i++)
-                if (va[i] != vb[i]) return va[i].CompareTo(vb[i]);
+                if (a[i] != b[i]) return a[i].CompareTo(b[i]);
             return 0;
         }
 
